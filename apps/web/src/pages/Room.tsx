@@ -128,12 +128,18 @@ export const Room = () => {
           swapMode ? room.seated.map((_, i) => i).filter((i) => i !== mySeat) : []
         }
         onSelect={requestSwap}
+        selfSeat={seated ? mySeat : null}
       >
         {swapMode ? (
           <p className="text-sm text-gold">点一个人跟他换座</p>
         ) : (
           <>
-            <p className="text-2xl font-medium">{count} 人</p>
+            {seated ? (
+              <p className="text-3xl font-bold tabular-nums text-gold">{mySeat + 1}号</p>
+            ) : null}
+            <p className={seated ? "mt-1 text-sm text-ink-soft" : "text-2xl font-medium"}>
+              {seated ? `你的座位 · 共 ${count} 人` : `${count} 人`}
+            </p>
             <p className="mt-1 text-xs text-ink-mute">
               {s.mode === "LANCELOT" ? "兰斯洛特" : "标准"}
               {s.ladyOfTheLake ? " · 湖中女神" : ""}

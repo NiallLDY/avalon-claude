@@ -157,6 +157,19 @@ test.describe("换座位", () => {
   });
 });
 
+test.describe("我是几号", () => {
+  test("房间里要一眼看出自己的座位号", async ({ page }) => {
+    await openApp(page);
+    await createRoom(page);
+
+    // 圆心直接写着自己的号
+    await expect(page.getByText("你的座位 · 共 1 人")).toBeVisible();
+    await expect(page.getByText("1号", { exact: true })).toBeVisible();
+    // 自己那格标「你」而不是昵称
+    await expect(page.getByText("你", { exact: true })).toBeVisible();
+  });
+});
+
 test.describe("座位号", () => {
   test("提到玩家的地方都要带号码 —— 线下全靠号码沟通", async ({ browser }) => {
     // 两人局够验证「号码 + 昵称」的拼法，不需要凑满一局
@@ -186,3 +199,4 @@ test.describe("座位号", () => {
     await b.close();
   });
 });
+

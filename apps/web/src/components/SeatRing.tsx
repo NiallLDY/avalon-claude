@@ -19,14 +19,27 @@ interface Props {
   readonly selectable?: readonly number[];
   readonly selected?: readonly number[];
   readonly onSelect?: (seat: number) => void;
+  /** 我的座位号；观战时为 null */
+  readonly selfSeat?: number | null;
   /** 圆环中心的内容 */
   readonly children?: React.ReactNode;
 }
 
-/** 座位在圆上的位置。从**正下方**开始顺时针 —— 正下方是「我」的方位，和线下坐姿对得上 */
-const seatPosition = (index: number, total: number): { x: number; y: number } => {
-  const angle = (Math.PI * 2 * index) / total + Math.PI / 2;
-  const R = 39; // 百分比半径。留出边距让 4.5rem 宽的座位块不被裁掉
+/**
+ * 座位在圆上的位置。
+ *
+ * **把自己转到正下方。** 这样屏幕上的圈和你线下抬头看到的一致：
+ * 你在最下面，左手边的人在屏幕左边。环的循环顺序不变，所以座位号之间的
+ * 相对关系（谁是下一个队长）也不变。观战时不转，按 0 号在下。
+ */
+const seatPosition = (
+  index: number,
+  total: number,
+  selfSeat: number | null,
+): { x: number; y: number } => {
+  const rotated = (index - (selfSeat ?? 0) + total) % total;
+  const angle = (Math.PI * 2 * rotated) / total + Math.PI / 2;
+  const R = 39; // 百分比半径。留出边距让座位块不被裁掉
   return { x: 50 + R * Math.cos(angle), y: 50 + R * Math.sin(angle) };
 };
 
@@ -36,6 +49,7 @@ export const SeatRing = ({
   selectable = [],
   selected = [],
   onSelect,
+  selfSeat = null,
   children,
 }: Props) => {
   const total = Math.max(seated.length, 1);
@@ -54,7 +68,8 @@ export const SeatRing = ({
         </div>
 
         {seated.map((player, seat) => {
-          const { x, y } = seatPosition(seat, total);
+          const { x, y } = seatPosition(seat, total, selfSeat);
+          const isSelf = seat === selfSeat;
           const canSelect = selectable.includes(seat);
           const isSelected = selected.includes(seat);
           const isLeader = game?.leaderSeat === seat;
@@ -76,14 +91,17 @@ export const SeatRing = ({
               className={`absolute flex w-[4.6rem] -translate-x-1/2 -translate-y-1/2 flex-col
                 items-center gap-0.5 rounded-xl p-1 transition
                 ${canSelect ? "active:scale-95" : "pointer-events-none"}
-                ${isSelected ? "bg-gold/15 ring-2 ring-gold" : ""}`}
+                ${isSelected ? "bg-gold/15 ring-2 ring-gold" : ""}
+                ${isSelf && !isSelected ? "bg-ink/5" : ""}`}
             >
               <span className="relative">
                 <Avatar
                   avatar={player.avatar}
-                  size={44}
+                  size={isSelf ? 50 : 44}
                   dim={!player.connected}
-                  className={onTeam ? "ring-2 ring-gold" : ""}
+                  className={
+                    onTeam ? "ring-2 ring-gold" : isSelf ? "ring-2 ring-ink/70" : ""
+                  }
                 />
 
                 {isLeader ? (
@@ -122,12 +140,20 @@ export const SeatRing = ({
                 <span
                   className={`flex h-[1.15rem] min-w-[1.15rem] shrink-0 items-center justify-center
                     rounded px-1 text-[0.72rem] font-bold leading-none tabular-nums
-                    ${isLeader ? "bg-gold text-ground" : "bg-surface-2 text-ink ring-1 ring-line"}`}
+                    ${isLeader
+                      ? "bg-gold text-ground"
+                      : isSelf
+                        ? "bg-ink text-ground"
+                        : "bg-surface-2 text-ink ring-1 ring-line"}`}
                 >
                   {seat + 1}
                 </span>
-                <span className="min-w-0 truncate text-[0.62rem] leading-tight text-ink-mute">
-                  {player.nick}
+                {/* 自己那格不显示昵称 —— 你知道自己叫什么，需要知道的是「我是几号」 */}
+                <span
+                  className={`min-w-0 truncate text-[0.62rem] leading-tight
+                    ${isSelf ? "font-semibold text-ink" : "text-ink-mute"}`}
+                >
+                  {isSelf ? "你" : player.nick}
                 </span>
               </span>
 

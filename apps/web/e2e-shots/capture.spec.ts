@@ -72,19 +72,14 @@ test("拍完整一局", async ({ browser }) => {
   await expect(host.getByText(/^\d+\/5 已看牌$/)).toBeVisible();
   await shot(host, "发牌");
 
-  // 身份卡：长按 1.2 秒才显形
+  // 身份卡：点一下翻开
   await host.getByRole("button", { name: "身份卡" }).click();
-  await expect(host.getByText("长按查看身份")).toBeVisible();
+  await expect(host.getByText("点击查看身份")).toBeVisible();
   await shot(host, "身份卡-盖住");
 
-  // 限定在抽屉里 —— 座位环容器现在也是 aspect-square，不限定会抓错
-  const card = host.getByRole("dialog").locator("div.aspect-square").first();
-  const box = (await card.boundingBox())!;
-  await host.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await host.mouse.down();
-  await host.waitForTimeout(1500);
+  await host.getByRole("dialog").locator("button.aspect-square").first().click();
+  await expect(host.getByText("点击盖回")).toBeVisible();
   await shot(host, "身份卡-显形");
-  await host.mouse.up();
   await host.keyboard.press("Escape");
   await host.waitForTimeout(400);
 

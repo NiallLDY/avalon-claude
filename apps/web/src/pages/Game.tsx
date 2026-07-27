@@ -15,7 +15,7 @@ import { Report } from "./Report.js";
 import { labeler, seatNo } from "../lib/labels.js";
 import { selfId, useStore } from "../store.js";
 
-/** 顶部：5 轮任务进度 + 流局计数 */
+/** 顶部：5 轮任务进度 + 流局计数 + 我是几号 */
 const Progress = ({ game }: { game: ClientGameView }) => {
   const sizes = TEAM_SIZE[game.playerCount as 5] ?? [];
   return (
@@ -41,16 +41,32 @@ const Progress = ({ game }: { game: ClientGameView }) => {
         })}
       </div>
 
-      <div className="flex items-center gap-1">
-        <span className="text-[0.65rem] text-ink-mute">流局</span>
-        {[0, 1, 2, 3, 4].map((i) => (
-          <span
-            key={i}
-            className={`h-2 w-2 rounded-full ${
-              i < game.rejectStreak ? "bg-red" : "bg-surface-2"
-            }`}
-          />
-        ))}
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          <span className="text-[0.65rem] text-ink-mute">流局</span>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <span
+              key={i}
+              className={`h-2 w-2 rounded-full ${
+                i < game.rejectStreak ? "bg-red" : "bg-surface-2"
+              }`}
+            />
+          ))}
+        </div>
+
+        {/* 我是几号 —— 常驻，投票和讨论全程都要用 */}
+        {game.me ? (
+          <span className="flex items-center gap-1 rounded-md bg-ink px-1.5 py-0.5 text-ground">
+            <span className="text-[0.6rem] leading-none opacity-70">你是</span>
+            <span className="text-[0.8rem] font-bold leading-none tabular-nums">
+              {game.me.seat + 1}号
+            </span>
+          </span>
+        ) : (
+          <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[0.65rem] text-ink-mute">
+            观战
+          </span>
+        )}
       </div>
     </div>
   );
@@ -146,6 +162,7 @@ export const Game = () => {
         selectable={selectable}
         selected={picked}
         onSelect={toggle}
+        selfSeat={me?.seat ?? null}
       >
         {waitingText() ? (
           <p

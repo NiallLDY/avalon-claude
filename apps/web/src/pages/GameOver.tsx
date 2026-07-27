@@ -47,10 +47,10 @@ export const GameOver = ({ game }: { game: ClientGameView }) => {
         ) : null}
       </header>
 
-      <SeatRing seated={room.seated} game={game}>
+      <SeatRing seated={room.seated} game={game} selfSeat={game.me?.seat ?? null}>
         {myRole ? (
           <div>
-            <p className="text-xs text-ink-mute">你是</p>
+            <p className="text-xs text-ink-mute">{game.me!.seat + 1}号 · 你是</p>
             <p className={`text-xl ${myRole.side === "RED" ? "text-red" : "text-blue"}`}>
               {myRole.name}
             </p>
