@@ -22,6 +22,7 @@ exec docker run --rm -i \
   -v "$PWD:/app" -w /app \
   -e CI=1 \
   -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+  -e "PW_CONFIG=${PW_CONFIG:-}" \
   --add-host=host.docker.internal:host-gateway \
   "$IMAGE" bash -lc '
 set -euo pipefail
@@ -51,5 +52,5 @@ for i in $(seq 1 60); do
 done
 
 cd apps/web
-pnpm exec playwright test "$@"
+pnpm exec playwright test ${PW_CONFIG:+--config "$PW_CONFIG"} "$@"
 ' -- "$@"

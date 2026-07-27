@@ -213,7 +213,10 @@ export const attachSocket = (io: IOServer, registry: Registry, store: Store): vo
     });
 
     on("room:profile", (profile) => {
+      // 先更新连接上的 profile —— 之后 room:join 用的就是它。
+      // 不在房间里也要更新，否则「进房前改的昵称」会被握手时的旧值覆盖掉。
       socket.data.profile = profile;
+      if (!socket.data.roomId) return;
       const room = currentRoom(socket);
       if (!room) return;
       const player = room.players.get(socket.data.playerId);

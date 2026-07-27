@@ -36,3 +36,4 @@ apps/web/public/art/
 # playwright 产物
 apps/web/test-results/
 apps/web/playwright-report/
+apps/web/shots/

@@ -28,6 +28,9 @@ services:
     volumes:
       - .:/app
       - pnpm-store:/pnpm-store
+    # 让容器里的脚本（如 scripts/bots.mjs）能连到宿主机上部署的实例
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "3000:3000" # Fastify + Socket.IO
       - "5173:5173" # Vite dev server

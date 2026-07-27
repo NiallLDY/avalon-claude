@@ -159,8 +159,10 @@ export const useStore = create<AppState>((set, get) => ({
   setProfile: (profile) => {
     saveProfile(profile);
     set({ profile });
-    // 只有在房间里才需要同步给服务端；调用方保证 nick 已清洗且非空
-    if (get().state) get().socket?.emit("room:profile", profile);
+    // **不管在不在房间里都要发。**
+    // socket 是应用挂载时就握手的，auth 里带的是那一刻的 profile；
+    // 之后改的昵称如果不同步，进房时服务端用的还是握手时那个旧名字。
+    get().socket?.emit("room:profile", profile);
   },
 
   createRoom: async (opts) => {
