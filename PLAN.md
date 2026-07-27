@@ -1,7 +1,7 @@
 # PLAN.md — Melbourne 阿瓦隆 · 架构与实施方案
 
 > 规则见 [`GAME.md`](./GAME.md)。本文覆盖：技术选型、架构、协议、UX、素材、部署、里程碑。
-> 状态：**M0 方案讨论中**，尚未写业务代码。
+> 状态：**M0–M8 全部完成**，可部署运行。部署步骤见 [`README.md`](./README.md)。
 
 ---
 
@@ -69,32 +69,44 @@
 
 ```
 avalon/
-├─ GAME.md                  # 规则权威文档
-├─ PLAN.md                  # 本文件
-├─ CLAUDE.md                # 给 Claude Code 的项目须知
-├─ README.md                # 部署与使用说明
-├─ docker-compose.yml
-├─ Dockerfile
+├─ GAME.md / PLAN.md / CLAUDE.md / README.md
+├─ Dockerfile                # 多阶段，产出单镜像
+├─ compose.yaml              # 生产
+├─ compose.dev.yaml          # 开发（宿主机只需要 Docker）
 ├─ .env.example
 ├─ scripts/
-│  ├─ deploy.sh             # 服务器：git pull + rebuild + restart
-│  ├─ dev.sh                # 本地：一键起 redis + web + server
-│  └─ art/                  # 素材生成流水线（见 §9.2）
-│     ├─ styles/*.json      # 每套画风的「风格圣经」
-│     ├─ gen-art.py         # 批量调 codex img_gen
-│     └─ optimize-art.py    # PNG → WebP
-├─ assets/
-│  └─ roles/<styleId>/*.webp # 角色卡成品（构建时拷进 web）
+│  ├─ deploy.sh              # 服务器：git pull + build + restart
+│  ├─ dev.sh / test.sh / sh.sh
+│  └─ art/                   # 素材流水线（见 §9.2）
+│     ├─ styles/<styleId>.json
+│     ├─ gen-art.py          # 批量调 codex img_gen
+│     └─ optimize-art.py     # PNG → WebP
+├─ assets/roles/<styleId>/   # 角色卡；web/ 子目录是交付档，构建时同步进前端
 ├─ packages/
-│  ├─ shared/               # 协议类型 + Zod schema + 常量表（前后端共用）
-│  │  └─ src/{protocol,types,tables,roles}.ts
-│  └─ engine/               # 纯规则引擎 + 单测
-│     └─ src/{machine,setup,vision,rules,lancelot,lady}.ts
+│  ├─ shared/src/
+│  │  ├─ roles.ts tables.ts  # 角色元数据、规则常量表
+│  │  ├─ game.ts view.ts     # 客户端也要用的类型
+│  │  ├─ protocol.ts         # 纯类型与常量，无 zod
+│  │  ├─ schemas.ts          # Zod schema，子入口 @avalon/shared/schemas，只有服务端 import
+│  │  └─ art.ts              # 画风注册表
+│  └─ engine/src/
+│     ├─ setup.ts vision.ts  # 发牌、开局视野
+│     ├─ machine.ts          # reduce(state, action, rng)
+│     ├─ projection.ts       # projectFor(state, viewer) —— 安全边界
+│     ├─ types.ts            # GameState 等服务端独有的机密类型
+│     └─ rng.ts              # 注入式随机源
 └─ apps/
-   ├─ server/               # Fastify + Socket.IO + Redis
-   │  └─ src/{index,rooms,socket,store,ratelimit,projection}.ts
-   └─ web/                  # React + Vite
-      └─ src/{pages,components,store,hooks,assets}/
+   ├─ server/src/
+   │  ├─ index.ts            # Fastify + Socket.IO + 静态资源
+   │  ├─ rooms.ts registry.ts# 房间模型与全站注册表
+   │  ├─ socket.ts           # 接线：认身份 → 过 Zod → 调 rooms → 逐人单播
+   │  ├─ store.ts            # Redis 快照
+   │  └─ ratelimit.ts config.ts ids.ts logger.ts
+   └─ web/src/
+      ├─ pages/              # Lobby / Room / Game / GameOver / Report
+      ├─ components/         # SeatRing / RoleCard / Avatar / ui
+      ├─ store.ts            # Zustand + socket
+      └─ lib/identity.ts     # localStorage 身份
 ```
 
 ---
@@ -135,23 +147,29 @@ function projectFor(game: Game, viewer: PlayerId | null): ClientGameView
 
 ## 5. 实时协议（Socket.IO 事件草案）
 
-**Client → Server**（全部经 Zod 校验，带 ack 回执）
+**Client → Server**（全部经 Zod 校验，schema 在 `@avalon/shared/schemas`）
 
-| 事件 | payload |
-|---|---|
-| `room:join` | `{ roomId, token, profile:{nick, avatar} , asSpectator? }` |
-| `room:sit` / `room:stand` | `{ seatIndex }` |
-| `room:settings` | `RoomSettings`（仅房主） |
-| `room:kick` / `room:transferHost` | `{ playerId }` |
-| `game:start` | `{}` |
-| `game:ackRole` | `{}` |
-| `game:proposeTeam` | `{ seatIndexes:number[], speakDirection:'CW'\|'CCW' }` |
-| `game:vote` | `{ approve:boolean }` |
-| `game:mission` | `{ success:boolean }` |
-| `game:lady` | `{ targetSeat:number }` |
-| `game:assassinate` | `{ targetSeat:number }` |
-| `game:earlyAssassinate` | `{}` |
-| `game:next` | `{}`（房主推进/强制跳过） |
+| 事件 | payload | 说明 |
+|---|---|---|
+| `room:join` | `{ roomId, asSpectator? }` | 身份在握手 `auth` 里带，不在 payload 里 |
+| `room:leave` | `{}` | |
+| `room:profile` | `{ nick, avatar }` | 昵称经 `sanitizeText` 清洗 |
+| `room:sit` / `room:stand` | `{}` | 座位是有序数组，入座即追加到末尾 |
+| `room:reorder` | `{ order: playerId[] }` | 仅房主；必须是当前落座者的一个排列 |
+| `room:shuffleSeats` | `{}` | 仅房主 |
+| `room:settings` | `{ settings }` | 仅房主 |
+| `room:options` | `{ name?, visibility?, allowSpectators? }` | 仅房主 |
+| `room:kick` / `room:transferHost` | `{ playerId }` | 仅房主 |
+| `game:start` | `{}` | 仅房主 |
+| `game:restart` | `{ rotateFirstLeader? }` | 仅房主，保留座位重新发牌 |
+| `game:action` | `{ action: ClientAction }` | 全部对局动作走这一个通道 |
+
+`ClientAction` 是 `ACK_ROLE` / `PROPOSE_TEAM` / `VOTE` / `PLAY_CARD` / `LADY_CHECK` /
+`EARLY_ASSASSINATE` / `ASSASSINATE` / `ADVANCE` 的可辨识联合。
+
+> **关键约束**：`ClientAction` 里**没有 `seat` 字段**，`ADVANCE` 里**没有 `byHost`**。
+> 两者都由服务端按连接身份填入。让客户端自报座位，等于把「你是不是队长」
+> 「这是不是你的票」这些校验全部送出去。协议层有测试断言即使塞进去也会被 Zod 剥掉。
 
 **Server → Client**
 
@@ -160,9 +178,14 @@ function projectFor(game: Game, viewer: PlayerId | null): ClientGameView
 | `state` | 完整 `ClientGameView`（裁剪后，幂等全量，重连即用） |
 | `event` | 一次性提示（`TEAM_APPROVED` / `MISSION_FAILED` / `LOYALTY_FLIPPED` …），用于播动画和音效 |
 | `error` | `{ code, message }` |
-| `room:list` | 大厅房间列表增量 |
+| `room:list` | 大厅房间列表 |
+| `kicked` | `{ reason }`，被踢或房间解散 |
 
 > 设计取向：**服务端每次变更下发全量裁剪视图**，不做增量 diff。状态才几 KB，简单胜过优化，且天然解决重连一致性。
+>
+> **推送必须逐人单播。** `io.to(room).emit("state", …)` 在这个项目里是禁用写法 ——
+> 它会把同一份 payload 发给房间里所有人，等于把身份全发出去。
+> 只有 `event`（播动画音效用的一次性提示，不含机密）才允许群发。
 
 ---
 
@@ -314,23 +337,17 @@ scripts/art/optimize-art.py              # PNG master → WebP（q92，原生 12
 ## 10. 部署方案
 
 ### 10.1 容器
-```yaml
-# docker-compose.yml（草案）
-services:
-  app:
-    build: .
-    restart: unless-stopped
-    env_file: .env
-    ports: ["127.0.0.1:8787:3000"]   # 只监听回环，由 Caddy 反代
-    depends_on: [redis]
-  redis:
-    image: redis:8-alpine
-    restart: unless-stopped
-    command: ["redis-server","--appendonly","yes","--save","60","1"]
-    volumes: ["redis-data:/data"]
-volumes: { redis-data: {} }
-```
-`Dockerfile` 多阶段：`pnpm install --frozen-lockfile` → `build web + server` → 运行阶段只带 `dist` + 生产依赖，最终镜像预期 < 200 MB。
+
+见 [`compose.yaml`](./compose.yaml) 与 [`Dockerfile`](./Dockerfile)（已实现并验证）。要点：
+
+- 应用容器只绑 `127.0.0.1:8787`，公网入口一律走 Caddy
+- `Dockerfile` 多阶段：manifest 层装依赖 → 构建 web + server → 运行层只装 server 生产依赖
+- `tsup` 把 `@avalon/*` 内联进单文件，运行层不需要 `packages/` 目录
+- 镜像约 **409 MB**（bookworm-slim 基底）。用 alpine 能小 40MB，但会引入 musl 与宿主机 glibc
+  预编译二进制不一致的问题，在自有服务器上不值得换
+- **产物必须留在 `apps/server/dist`**：pnpm 用隔离式 node_modules，依赖软链在
+  `apps/server/node_modules` 下，把 bundle 挪到 `/app/dist` 就解析不到 fastify 了
+
 
 ### 10.2 Caddy（服务器已有 Caddy）
 ```caddy
