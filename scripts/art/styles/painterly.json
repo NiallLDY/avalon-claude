@@ -1,0 +1,65 @@
+{
+  "styleId": "painterly",
+  "displayName": "油画立绘",
+  "note": "第一套画风。半身立绘、厚涂笔触、强轮廓光、暗角背景。suffix 与 palette 对全部角色逐字相同，这是整套画风统一的唯一保证 —— 改 suffix 等于重出全套。",
+
+  "suffix": "digital oil painting, rich impasto brushwork, dramatic chiaroscuro with a strong rim light, dark vignette background, half-body centered composition facing the viewer, square framing, high fantasy Arthurian legend, one of a matched set of ten character cards painted in an identical style by the same artist, muted desaturated palette with a single strong accent light, no text, no lettering, no watermark, no decorative border, no frame",
+
+  "palette": {
+    "BLUE": "colour palette of deep indigo, midnight blue and cold steel, with silver and pale-gold highlights",
+    "RED": "colour palette of dark crimson, blackened iron and deep maroon, with tarnished copper and ember-orange highlights"
+  },
+
+  "roles": {
+    "merlin": {
+      "name": "梅林",
+      "side": "BLUE",
+      "subject": "the elderly sorcerer Merlin, long silver beard, a deep hood shadowing his eyes, richly embroidered robes, holding a staff tipped with a glowing star, faint constellations turning slowly behind him, serene and secretive expression, a man who knows everything and may say nothing"
+    },
+    "percival": {
+      "name": "派西维尔",
+      "side": "BLUE",
+      "subject": "the young knight Percival, clean-shaven with keen watchful eyes, polished mail beneath a heraldic surcoat, holding a shield bearing a chalice, glancing warily to one side as though weighing which of two figures to believe, a faint grail-light behind him"
+    },
+    "loyal-servant": {
+      "name": "忠臣",
+      "side": "BLUE",
+      "subject": "a steadfast common knight, loyal servant of Arthur, plain chainmail and a simple cross-emblazoned tabard, both hands resting on the pommel of a sword planted point-down before him, calm resolute open gaze, rows of banners fading into mist behind him"
+    },
+    "lancelot-blue": {
+      "name": "蓝兰斯洛特",
+      "side": "BLUE",
+      "subject": "the knight Lancelot in gleaming plate armour, long dark hair, helm held under one arm, a two-sided cloak turned so its blue side faces the viewer, a greatsword resting against his shoulder, noble and determined, a faint mirrored silhouette of himself behind him"
+    },
+    "morgana": {
+      "name": "莫甘娜",
+      "side": "RED",
+      "subject": "the sorceress Morgana, beautiful and cold, raven-black hair, an elegant gown worked with tarnished-gold filigree, a gauzy veil of shadow at her shoulders, one hand raised weaving a false light that imitates a wizard's magic, a black crescent moon behind her, a deceitful half-smile"
+    },
+    "assassin": {
+      "name": "刺客",
+      "side": "RED",
+      "subject": "a hooded assassin, the face hidden in shadow above the mouth, one eye catching a sliver of light, dark leather and a high collar, a curved dagger held reversed along the forearm, poised utterly still and waiting, embers drifting behind him"
+    },
+    "mordred": {
+      "name": "莫德雷德",
+      "side": "RED",
+      "subject": "the usurper Mordred, a dark iron crown on his brow, regal black armour with blood-red enamel, arms folded, a cold arrogant stare, one half of his figure dissolving into pure shadow as though he cannot be seen at all, a ruined throne behind him"
+    },
+    "oberon": {
+      "name": "奥伯伦",
+      "side": "RED",
+      "subject": "the outcast Oberon, feral and solitary, one blind milky eye and one burning eye, a crown of blackthorn, a tattered cloak over a gaunt weathered frame, standing entirely alone in cold fog with no companion anywhere, crows scattering behind him"
+    },
+    "minion": {
+      "name": "爪牙",
+      "side": "RED",
+      "subject": "a faceless minion of Mordred, an iron half-mask and deep hood leaving the face unreadable, worn brigandine armour, a gloved hand on a short sword, a subservient forward-leaning posture, ravens perched on broken stone behind him"
+    },
+    "lancelot-red": {
+      "name": "红兰斯洛特",
+      "side": "RED",
+      "subject": "the knight Lancelot fallen, unmistakably the same warrior but in blackened plate armour with red enamel, long dark hair, helm under one arm, a two-sided cloak turned so its crimson side faces the viewer, a greatsword lowered, grim and shadowed, a faint mirrored silhouette of himself behind him"
+    }
+  }
+}

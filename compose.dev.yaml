@@ -1,0 +1,53 @@
+# 开发/测试环境。生产用 compose.yaml（M8）。
+#
+# 用法（都在宿主机跑，不需要本机 node）：
+#   ./scripts/dev.sh          起 server(:3000) + web(:5173) + redis
+#   ./scripts/test.sh         跑 vitest
+#   ./scripts/sh.sh           进容器 shell
+#
+# 镜像用 bookworm-slim 而非 alpine：与宿主机同为 glibc，
+# 于是 bind mount 出来的 node_modules（含 esbuild 等预编译二进制）宿主机也能直接用，
+# 编辑器/类型检查不会因为 musl 二进制而报错。
+name: avalon-dev
+
+services:
+  app:
+    image: node:24-bookworm-slim
+    working_dir: /app
+    # tini 般的信号处理：node 官方镜像自带 --init 由 compose 提供
+    init: true
+    command: pnpm dev
+    environment:
+      NODE_ENV: development
+      REDIS_URL: redis://redis:6379
+      HOST: 0.0.0.0
+      PORT: "3000"
+      # pnpm store 放具名 volume，重建容器不用重新下载全网
+      npm_config_store_dir: /pnpm-store
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+    volumes:
+      - .:/app
+      - pnpm-store:/pnpm-store
+    ports:
+      - "3000:3000" # Fastify + Socket.IO
+      - "5173:5173" # Vite dev server
+    depends_on:
+      redis:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c", "corepack enable && exec \"$$@\"", "--"]
+
+  redis:
+    image: redis:8-alpine
+    init: true
+    # 开发环境不需要持久化，重启即干净
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:6379:6379" # 方便宿主机 redis-cli 观察
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+volumes:
+  pnpm-store:

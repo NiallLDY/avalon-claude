@@ -1,0 +1,17 @@
+node_modules
+**/node_modules
+dist
+**/dist
+build
+.git
+.github
+*.md
+!README.md
+.env
+.env.*
+coverage
+**/coverage
+test-results
+playwright-report
+.vscode
+.idea

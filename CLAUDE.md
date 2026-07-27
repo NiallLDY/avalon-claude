@@ -12,7 +12,7 @@ Melbourne 阿瓦隆 —— 线下面对面玩阿瓦隆时使用的**在线发牌
 
 ## 当前状态
 
-**M0：文档与选型阶段，尚无业务代码。** 里程碑见 `PLAN.md §12`。
+**M1：骨架搭建中。** `packages/shared` 已有常量表与角色元数据（41 个测试）。里程碑见 `PLAN.md §12`。
 
 ## 技术栈速查
 
@@ -33,17 +33,18 @@ Melbourne 阿瓦隆 —— 线下面对面玩阿瓦隆时使用的**在线发牌
 6. **无账号系统**：身份 = `localStorage` 里的 `playerId + token`。不要引入登录、邮箱、密码。
 7. **规则引擎不碰副作用**：`engine` 里禁止 `Date.now()`、`Math.random()`、网络、Redis。随机源与时间戳由调用方注入。
 
-## 开发命令（M1 之后可用）
+## 开发命令
+
+**开发与测试一律在容器里跑**，宿主机不需要 node。镜像 `node:24-bookworm-slim`，与生产同大版本、同 libc。
 
 ```bash
-pnpm install
-pnpm dev            # 并行起 server(:3000) + web(:5173) + 本地 redis
-pnpm test           # vitest（引擎单测为主）
-pnpm typecheck
-pnpm build
+./scripts/dev.sh     # 起 server(:3000) + web(:5173) + redis(:6379)
+./scripts/test.sh    # vitest；参数透传，如 ./scripts/test.sh vision --watch
+./scripts/sh.sh      # 进容器 shell
 ```
 
-> 注意：**本机当前未安装 Node**，M1 开工前需先装 Node 24 + pnpm 10（corepack）。
+容器内可用 `pnpm install / dev / test / typecheck / build`。
+node_modules 通过 bind mount 落在宿主机（同为 glibc x64），编辑器能直接解析类型。
 
 ## 约定
 

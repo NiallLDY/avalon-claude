@@ -40,7 +40,7 @@
 | 状态存储 | **Redis 8**（房间快照 + 限流计数） | — |
 | 规则引擎 | 纯函数包 `packages/engine`，零 I/O | — |
 | 测试 | **Vitest**（引擎单测为主）+ **Playwright**（关键流程 e2e，可选） | — |
-| 容器 | 多阶段 Dockerfile → 单镜像同时提供 静态资源 + API + WS | node:24-alpine |
+| 容器 | 多阶段 Dockerfile → 单镜像同时提供 静态资源 + API + WS | node:24-bookworm-slim |
 
 ### 2.2 关键决策与理由
 
@@ -78,7 +78,13 @@ avalon/
 ├─ .env.example
 ├─ scripts/
 │  ├─ deploy.sh             # 服务器：git pull + rebuild + restart
-│  └─ dev.sh                # 本地：一键起 redis + web + server
+│  ├─ dev.sh                # 本地：一键起 redis + web + server
+│  └─ art/                  # 素材生成流水线（见 §9.2）
+│     ├─ styles/*.json      # 每套画风的「风格圣经」
+│     ├─ gen-art.py         # 批量调 codex img_gen
+│     └─ optimize-art.py    # PNG → WebP
+├─ assets/
+│  └─ roles/<styleId>/*.webp # 角色卡成品（构建时拷进 web）
 ├─ packages/
 │  ├─ shared/               # 协议类型 + Zod schema + 常量表（前后端共用）
 │  │  └─ src/{protocol,types,tables,roles}.ts
@@ -254,14 +260,46 @@ function projectFor(game: Game, viewer: PlayerId | null): ClientGameView
 - **署名要求（CC BY 4.0）**：在"关于/规则"页注明 `Avatar artwork: "Avatar Illustration System" by Micah Lanier, CC BY 4.0`。
 - 备选方案：直接搬运 vue-color-avatar 的 Vue SFC 部件转 React（部件更多、风格略不同），工作量大得多，除非你就要那个特定观感。
 
-### 9.2 角色卡插画 —— 手绘 SVG 纹章（**推荐**）
-- 10 个角色：梅林、派西维尔、忠臣、蓝兰斯洛特 / 莫甘娜、刺客、莫德雷德、奥伯伦、爪牙、红兰斯洛特。
-- 风格提案：**中世纪纹章徽记（heraldic crest）**，统一 `512×512` viewBox、统一描边权重、统一双色渐变 + 金色描边。每角色一个标志性符号：
-  梅林=星辰之杖｜派西维尔=圣杯与盾｜忠臣=十字剑盾｜兰斯洛特=双色分裂盾
-  莫甘娜=面纱与暗月｜刺客=匕首｜莫德雷德=戴兜帽的王冠｜奥伯伦=独眼｜爪牙=乌鸦
-- 理由：单个 < 10 KB、任意缩放锐利、可随主题变色、**零版权风险**、我可以直接手写。
-- **AI 生图路线的现状**：我本身不能出图；本机 `codex` 是 **ChatGPT 账号登录，没有 API key**，也没有图像生成工具，因此**当前无法用 codex 出图**。
-  如果你想要更"重"的写实/厚涂插画，需要提供 `OPENAI_API_KEY`，我写一个 `scripts/gen-art.ts` 批量调 `gpt-image-1`，用统一 prompt 前缀保证风格一致，产出 PNG/WebP 落到 `apps/web/src/assets/roles/`。**这条路随时可以后加，先用 SVG 不阻塞开发。**
+### 9.2 角色卡插画 —— codex `img_gen` 生成的**油画立绘**（已定稿）
+
+**出图能力（实测结论）**
+本机 `codex` CLI 的 `image_generation` 特性为 `stable / enabled`，**ChatGPT 账号登录即可用，不需要 `OPENAI_API_KEY`**。实测：
+
+```bash
+codex exec -C <outdir> --sandbox workspace-write \
+  "Use your image generation tool (img_gen) to generate ONE image and save it as ./x.png.
+   Do NOT resize or post-process it. Prompt: <...>"
+```
+
+- 原生输出 **1254×1254 PNG**（约 1.2–2.7 MB），单张耗时 **~1.5–2 分钟**。
+- 提示词里必须写 **"Do NOT resize or post-process"**，否则它会自己写个 Python 缩放脚本去凑你要求的尺寸，反而糊掉。
+- 无水印、无边框需在提示词里显式排除（`no text, no watermark, no border`）。
+
+**风格：油画立绘（`painterly`）**
+半身立绘、厚涂笔触、强轮廓光、暗角背景、正方形构图。已选定为第一套。
+
+**多风格架构（为将来的卡通风格预留）**
+角色卡从第一天起就是**可切换资源集**，不是写死的图片路径：
+
+```
+assets/roles/<styleId>/<roleId>.webp     # 生成产物，styleId ∈ {painterly, cartoon, ...}
+scripts/art/styles/<styleId>.json        # 该风格的「风格圣经」：共用后缀 + 阵营色板 + 每角色提示词
+scripts/art/gen-art.py                   # 批量调 codex img_gen，并发生成
+scripts/art/optimize-art.py              # PNG master → WebP（q92，原生 1254²）
+```
+
+- 前端：`ART_STYLES` 常量 + `useArtStyle()`，图片路径由 `` `/art/roles/${styleId}/${roleId}.webp` `` 拼出。
+- 加第二套风格 = 加一个 `cartoon.json` + 跑一次脚本 + 在设置里多一个选项，**不改任何组件**。
+- 风格选择存 `localStorage`，属于个人偏好，不进房间状态（不影响服务端）。
+
+**10 个角色 ID（与 `packages/shared` 的 `RoleId` 对齐）**
+`merlin` `percival` `loyal-servant` `lancelot-blue` / `morgana` `assassin` `mordred` `oberon` `minion` `lancelot-red`
+
+- 两个兰斯洛特刻意画成**同一个人物的蓝/红两面**（双面披风翻转），呼应"换阵营"机制。
+- 莫甘娜的立绘带**模仿法术微光**的手势，呼应她在派西维尔眼里与梅林难辨。
+- 莫德雷德半身没入阴影（梅林看不见）、奥伯伦独自处于浓雾（队友互不相认）—— 机制暗示进画面。
+
+**体积**：master WebP q92 约 300–450 KB/张，前端按需再压到 1024² q85（约 120–180 KB）并**懒加载**（只有自己的身份卡 + 终局揭晓才用到）。
 
 ### 9.3 字体与图标
 - 中文用系统字体栈（`-apple-system, "PingFang SC", "Noto Sans SC", …`），**不引入几 MB 的中文字体**。
@@ -324,8 +362,18 @@ cd /path/to/avalon && ./scripts/deploy.sh
 
 ---
 
-## 11. 本机开发环境（待办）
-本机**未安装 Node**。开工前需要：`corepack` 方式装 **Node 24 + pnpm 10**（或纯 Docker 开发，但热更新体验差）。建议直接装本地 Node。
+## 11. 本机开发环境
+
+**开发与测试全部在容器内进行**，宿主机只需要 Docker。见 `compose.dev.yaml` 与 `scripts/{dev,test,sh}.sh`。
+
+| 决策 | 理由 |
+|---|---|
+| dev 镜像 = `node:24-bookworm-slim` | 与生产镜像同大版本同 libc；不用 alpine 是为了避开 musl 与宿主机 glibc 的预编译二进制（esbuild 等）冲突 |
+| 整个仓库 bind mount 进 `/app` | 热更新即时；`node_modules` 落在宿主机，编辑器能解析类型 |
+| pnpm store 放具名 volume | 重建容器不用重下依赖 |
+| redis 端口只绑 `127.0.0.1` | 宿主机可以 `redis-cli` 观察，但不暴露公网 |
+
+> 宿主机上另有 nvm 装的 node（当前 default 已对齐 24），但项目命令不依赖它。
 
 ---
 
@@ -340,7 +388,7 @@ cd /path/to/avalon && ./scripts/deploy.sh
 | **M4** | 前端：首页/大厅/房间等待页/头像系统 | 能建房入座 |
 | **M5** | 前端：对局主界面（单屏）+ 全流程联调 | 标准模式可完整玩 |
 | **M6** | 扩展模式 UI + 终局战报页 | 全模式可玩 |
-| **M7** | 素材（角色 SVG）、动效、PWA、移动端打磨 | 体验达标 |
+| **M7** | 素材接入（角色卡多风格切换）、动效、PWA、移动端打磨 | 体验达标 |
 | **M8** | 部署上线、README、运维脚本 | 线上可用 |
 
 ---
@@ -352,7 +400,7 @@ cd /path/to/avalon && ./scripts/deploy.sh
 | # | 问题 | 我的建议 |
 |---|---|---|
 | P1 | 头像用 DiceBear `micah`（同源美术、开箱即用）还是硬搬 vue-color-avatar 部件？ | **DiceBear** |
-| P2 | 角色卡先用**手绘 SVG 纹章**，还是等你给 `OPENAI_API_KEY` 出 AI 插画？ | **先 SVG，AI 图后续可替换** |
+| ~~P2~~ | ~~角色卡美术方向~~ | ✅ **已定：油画立绘（codex img_gen），并预留第二套卡通风格** |
 | P3 | 要不要**观战聊天/发言计时器**？ | 都不做（线下已解决），只留"发言方向"提示 |
 | P4 | 终局是否需要**复盘页**（逐轮投票/出牌统计）？ | 做，纯服务端已有数据，成本低 |
 | P5 | 是否需要**房间内多局连打**（保留座位重新发牌）？ | 做，一晚上要开好多局 |
