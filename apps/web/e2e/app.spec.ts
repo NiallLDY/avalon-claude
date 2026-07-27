@@ -116,7 +116,7 @@ test.describe("房间", () => {
 
     // 限定在设置面板内 —— 底部footer 也有一句「还差 N 人」，不限定会撞上
     const sheet = page.getByRole("dialog");
-    await expect(sheet.getByText("人数 = 实际入座人数")).toBeVisible();
+    await expect(sheet.getByText("上桌几个人就是几人局")).toBeVisible();
     await expect(sheet.getByText(/还差 4 人才能开局（5–10 人）/)).toBeVisible();
   });
 });
