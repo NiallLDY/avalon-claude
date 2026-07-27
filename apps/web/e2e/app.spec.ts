@@ -200,3 +200,46 @@ test.describe("座位号", () => {
   });
 });
 
+
+test.describe("退出房间", () => {
+  test("等待页点退出要回到大厅", async ({ page }) => {
+    await openApp(page);
+    await createRoom(page);
+    await page.getByRole("button", { name: "← 退出" }).click();
+    await expect(page.getByText("MELBOURNE 阿瓦隆")).toBeVisible();
+  });
+
+  test("对局中点退出也要回到大厅", async ({ browser }) => {
+    // 要 5 个人才能开局，这条只能起 5 个上下文
+    const ctxs = await Promise.all(
+      Array.from({ length: 5 }, () => browser.newContext({ locale: "zh-CN" })),
+    );
+    const pages = await Promise.all(ctxs.map((c) => c.newPage()));
+    for (const p of pages) await openApp(p);
+
+    const host = pages[0]!;
+    const code = await createRoom(host, "退出测试");
+    for (const p of pages.slice(1)) {
+      await p.getByPlaceholder("房间码").fill(code);
+      await p.getByRole("button", { name: "进" }).click();
+      await expect(p.locator("p.font-display").first()).toHaveText(code);
+    }
+    await expect(host.getByRole("button", { name: "开始游戏" })).toBeEnabled();
+    await host.getByRole("button", { name: "开始游戏" }).click();
+
+    const quitter = pages[4]!;
+    await expect(quitter.getByRole("button", { name: "我已看牌" })).toBeVisible();
+    await quitter.getByRole("button", { name: "退出" }).click();
+    // 对局中退出要先确认 —— 座位会保留，这件事必须说清楚
+    await expect(quitter.getByText(/座位会一直留着/)).toBeVisible();
+    await quitter.getByRole("button", { name: "离开" }).click();
+
+    // 之前这里什么都不会发生：客户端本地状态没清，一直停在对局页
+    await expect(quitter.getByText("MELBOURNE 阿瓦隆")).toBeVisible();
+    // 而且刷新之后不该又被自动拉回房间
+    await quitter.reload();
+    await expect(quitter.getByText("MELBOURNE 阿瓦隆")).toBeVisible();
+
+    for (const c of ctxs) await c.close();
+  });
+});

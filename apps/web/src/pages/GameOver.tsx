@@ -19,7 +19,7 @@ const REASON: Record<string, string> = {
 };
 
 export const GameOver = ({ game }: { game: ClientGameView }) => {
-  const { state, emit } = useStore();
+  const { state, emit, leaveRoom } = useStore();
   const [reportOpen, setReportOpen] = useState(false);
   if (!state?.room) return null;
 
@@ -80,7 +80,7 @@ export const GameOver = ({ game }: { game: ClientGameView }) => {
             </div>
           )}
         </div>
-        <Button tone="ghost" className="w-full text-xs" onClick={() => emit("room:leave")}>
+        <Button tone="ghost" className="w-full text-xs" onClick={leaveRoom}>
           退出房间
         </Button>
       </div>

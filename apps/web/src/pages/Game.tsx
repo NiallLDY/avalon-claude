@@ -86,9 +86,10 @@ const PHASE_HINT: Record<string, string> = {
 };
 
 export const Game = () => {
-  const { state, act, emit } = useStore();
+  const { state, act, leaveRoom } = useStore();
   const [picked, setPicked] = useState<number[]>([]);
   const [sheet, setSheet] = useState<"role" | "report" | null>(null);
+  const [confirmLeave, setConfirmLeave] = useState(false);
 
   const game = state?.game ?? null;
   const phase = game?.phase;
@@ -219,7 +220,7 @@ export const Game = () => {
           <Button tone="ghost" className="flex-1 text-xs" onClick={() => setSheet("report")}>
             战报
           </Button>
-          <Button tone="ghost" className="flex-1 text-xs" onClick={() => emit("room:leave")}>
+          <Button tone="ghost" className="flex-1 text-xs" onClick={() => setConfirmLeave(true)}>
             退出
           </Button>
         </nav>
@@ -230,6 +231,26 @@ export const Game = () => {
       </Sheet>
       <Sheet open={sheet === "report"} onOpenChange={(o) => setSheet(o ? "report" : null)} title="战报">
         <Report game={game} seated={room.seated} />
+      </Sheet>
+
+      {/* 对局中退出座位是保留的 —— 得说清楚怎么回来，不然人会以为把牌局搞砸了 */}
+      <Sheet open={confirmLeave} onOpenChange={setConfirmLeave} title="离开这局？">
+        <div className="space-y-3 pb-2">
+          <p className="text-sm text-ink-soft">
+            牌局还没结束。你的座位会一直留着，用房间码
+            <span className="mx-1 font-display tracking-widest text-gold">{room.id}</span>
+            随时能回来接着打。
+          </p>
+          <p className="text-xs text-ink-mute">在你回来之前，其他人会看到你的座位是掉线状态。</p>
+          <div className="flex gap-2 pt-1">
+            <Button tone="ghost" className="flex-1" onClick={() => setConfirmLeave(false)}>
+              留下
+            </Button>
+            <Button tone="red" className="flex-1" onClick={leaveRoom}>
+              离开
+            </Button>
+          </div>
+        </div>
       </Sheet>
     </div>
   );
