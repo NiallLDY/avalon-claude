@@ -518,6 +518,41 @@ export const restartGame = (
 };
 
 /**
+ * 只是给人看结果的过渡阶段。这些没有任何人要做决定，
+ * 服务端等一小会儿自动往下走 —— 让全场卡在等房主点一下是很糟的体验。
+ */
+export const AUTO_ADVANCE_PHASES: ReadonlySet<string> = new Set([
+  "VOTE_RESULT",
+  "MISSION_RESULT",
+  "LOYALTY_FLIP",
+]);
+
+export const isAutoAdvancePhase = (room: Room): boolean =>
+  room.game !== null && AUTO_ADVANCE_PHASES.has(room.game.phase);
+
+/**
+ * 阶段指纹。定时器触发时用它确认「这期间没人抢先推进过」，
+ * 否则会多推一次，直接跳掉下一个阶段。
+ */
+export const phaseStamp = (room: Room): string => {
+  const g = room.game;
+  if (!g) return "none";
+  return [g.phase, g.roundIndex, g.attempt, g.missions.length, g.proposals.length,
+    g.loyalty?.drawn ?? 0, g.lady?.checks.length ?? 0].join("/");
+};
+
+/** 服务端替房主推进。用于自动推进定时器 */
+export const advanceAutomatically = (room: Room, now: number): ReduceResult | null => {
+  if (!room.game) return null;
+  const result = reduce(room.game, { type: "ADVANCE", byHost: true }, cryptoRng);
+  if (result.ok) {
+    room.game = result.state;
+    touch(room, now);
+  }
+  return result;
+};
+
+/**
  * 把客户端动作接到引擎上。
  * **座位号在这里填**，客户端发来的 payload 里根本没有这个字段（见 shared/protocol.ts）。
  */

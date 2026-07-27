@@ -22,6 +22,29 @@ import {
   saveProfile,
 } from "./lib/identity.js";
 
+/**
+ * 一张待玩家点掉的结果卡。事件到达时就把当时的状态快照进去 ——
+ * 服务端会自动往下走，等玩家点的时候原状态已经没了。
+ */
+export type ResultCard =
+  | {
+      readonly kind: "VOTE";
+      readonly id: number;
+      readonly approved: boolean;
+      readonly rejectStreak: number;
+      readonly votes: readonly boolean[];
+      readonly team: readonly number[];
+    }
+  | {
+      readonly kind: "MISSION";
+      readonly id: number;
+      readonly success: boolean;
+      readonly failCount: number;
+      readonly failsRequired: 1 | 2;
+      readonly team: readonly number[];
+    }
+  | { readonly kind: "LOYALTY"; readonly id: number; readonly swapped: boolean | null };
+
 interface Toast {
   readonly id: number;
   readonly text: string;
@@ -44,6 +67,8 @@ interface AppState {
   /** 正在自动回房（刷新后恢复），此时不该把用户甩回大厅 */
   restoring: boolean;
   lastEvent: GameEvent | null;
+  /** 当前盖在屏幕上的结果卡，玩家点掉为止 */
+  result: ResultCard | null;
   toasts: readonly Toast[];
 
   connect: () => void;
@@ -61,34 +86,36 @@ interface AppState {
   setSettings: (settings: GameSettings) => void;
   toast: (text: string, tone?: Toast["tone"]) => void;
   dismissToast: (id: number) => void;
+  dismissResult: () => void;
 }
 
 const identity = loadIdentity();
 let toastSeq = 0;
+let resultSeq = 0;
 
 /** 错误码 → 给人看的话。服务端回的是机器码，别直接甩给用户 */
 const ERROR_TEXT: Record<string, string> = {
   ROOM_NOT_FOUND: "房间不存在或已解散",
   ROOM_FULL: "房间满了",
-  ROOM_IN_GAME: "对局进行中，做不了这个",
+  ROOM_IN_GAME: "牌局进行中，现在改不了",
   NOT_HOST: "只有房主能这么做",
   NOT_SEATED: "你不在座位上",
   ALREADY_SEATED: "你已经入座了",
   SPECTATORS_DISABLED: "这个房间不允许观战",
-  INVALID_PAYLOAD: "参数不合法",
+  INVALID_PAYLOAD: "这个操作没生效，再试一次",
   RATE_LIMITED: "操作太快了，慢一点",
-  NOT_IN_GAME: "还没开局",
-  WRONG_PHASE: "现在还不是时候",
+  NOT_IN_GAME: "这局还没开始",
+  WRONG_PHASE: "现在还轮不到做这个",
   NOT_YOUR_TURN: "还没轮到你",
-  INVALID_SEAT: "选的人不对",
-  INVALID_TEAM_SIZE: "队伍人数不对",
+  INVALID_SEAT: "这个人选不了",
+  INVALID_TEAM_SIZE: "上车人数不对",
   DUPLICATE_TEAM_MEMBER: "同一个人只能选一次",
-  NOT_ON_TEAM: "你没上车",
+  NOT_ON_TEAM: "你不在这一车上",
   ALREADY_ACTED: "你已经操作过了",
-  ILLEGAL_CARD: "你不能出这张牌",
+  ILLEGAL_CARD: "你不能打这张牌",
   INVALID_LADY_TARGET: "这个人不能被查验",
   EARLY_ASSASSINATION_UNAVAILABLE: "提前刺杀还没解锁",
-  GAME_OVER: "这局已经结束了",
+  GAME_OVER: "这局已经结束",
   SWAP_TARGET_BUSY: "对方正在处理别的换座请求",
   NO_PENDING_SWAP: "这个换座请求已经失效了",
 };
@@ -101,6 +128,7 @@ export const useStore = create<AppState>((set, get) => ({
   state: null,
   restoring: loadLastRoom() !== null,
   lastEvent: null,
+  result: null,
   toasts: [],
 
   connect: () => {
@@ -135,7 +163,48 @@ export const useStore = create<AppState>((set, get) => ({
     });
 
     socket.on("room:list", ({ rooms }: { rooms: RoomSummary[] }) => set({ rooms }));
-    socket.on("event", (event: GameEvent) => set({ lastEvent: event }));
+
+    socket.on("event", (event: GameEvent) => {
+      set({ lastEvent: event });
+      // 服务端先推 state 再推 event，所以这里读到的正是结果那一刻的状态。
+      // 必须当场快照下来 —— 过几秒它就自动进下一阶段，投票明细就没了。
+      const game = get().state?.game;
+      if (!game) return;
+
+      if (event.type === "VOTE_REVEALED" && game.revealedVotes) {
+        set({
+          result: {
+            kind: "VOTE",
+            id: ++resultSeq,
+            approved: event.approved,
+            rejectStreak: event.rejectStreak,
+            votes: [...game.revealedVotes],
+            team: [...(game.team ?? [])],
+          },
+        });
+      } else if (event.type === "MISSION_RESOLVED") {
+        const mission = game.missions.at(-1);
+        if (!mission) return;
+        set({
+          result: {
+            kind: "MISSION",
+            id: ++resultSeq,
+            success: event.success,
+            failCount: event.failCount,
+            failsRequired: mission.failsRequired,
+            team: [...mission.team],
+          },
+        });
+      } else if (event.type === "LOYALTY_FLIPPED") {
+        set({
+          result: {
+            kind: "LOYALTY",
+            id: ++resultSeq,
+            swapped: event.hidden ? null : event.swapped,
+          },
+        });
+      }
+    });
 
     socket.on("error", ({ code, message }: { code: string; message: string }) => {
       // 自动回房失败（房间已解散等）不该弹错，安静回大厅就行
@@ -144,7 +213,7 @@ export const useStore = create<AppState>((set, get) => ({
         set({ restoring: false });
         return;
       }
-      get().toast(ERROR_TEXT[code] ?? message ?? "出错了", "error");
+      get().toast(ERROR_TEXT[code] ?? message ?? "出了点问题，再试一次", "error");
     });
 
     socket.on("kicked", ({ reason }: { reason: string }) => {
@@ -208,6 +277,7 @@ export const useStore = create<AppState>((set, get) => ({
     setTimeout(() => get().dismissToast(id), 2600);
   },
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+  dismissResult: () => set({ result: null }),
 }));
 
 export const selfId = identity.playerId;

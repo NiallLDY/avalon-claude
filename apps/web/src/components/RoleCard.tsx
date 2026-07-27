@@ -69,7 +69,7 @@ export const RoleCard = ({
             <span className="text-4xl">🂠</span>
             <span className="text-sm text-ink-soft">点击查看身份</span>
             <span className="px-8 text-center text-[0.7rem] text-ink-mute">
-              看完再点一下盖回；切到后台会自动盖上
+              看完再点一下盖回，切走也会自动盖上
             </span>
           </span>
         ) : (
@@ -104,7 +104,7 @@ export const RoleCard = ({
                 markOf={(s) => (me.vision.lancelotSeats.includes(s) ? "兰" : undefined)}
               />
               {me.vision.lancelotSeats.length > 0 ? (
-                <p className="text-[0.68rem] text-ink-mute">「兰」= 兰斯洛特，阵营可能被翻牌改变</p>
+                <p className="text-[0.68rem] text-ink-mute">带「兰」的是兰斯洛特，翻忠诚牌时可能换边</p>
               ) : null}
             </div>
           ) : null}
@@ -136,7 +136,7 @@ export const RoleCard = ({
             </div>
           ) : null}
 
-          {!hasIntel ? <p className="text-sm text-ink-mute">你没有任何情报，全靠推理。</p> : null}
+          {!hasIntel ? <p className="text-sm text-ink-mute">你什么都不知道，全靠听和推。</p> : null}
 
           {meta.isLancelot ? (
             <p className="text-sm text-gold">

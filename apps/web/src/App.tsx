@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { ResultOverlay } from "./components/ResultOverlay.js";
 import { ConnectionBanner, Toasts } from "./components/ui.js";
 import { Lobby } from "./pages/Lobby.js";
 import { Room } from "./pages/Room.js";
@@ -27,6 +28,7 @@ export const App = () => {
     <>
       <ConnectionBanner />
       <main className="min-h-0 flex-1">{screen}</main>
+      <ResultOverlay />
       <Toasts />
     </>
   );

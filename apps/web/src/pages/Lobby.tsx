@@ -105,7 +105,7 @@ export const Lobby = () => {
           <NickInput />
         </div>
         <p className="mt-2 text-[0.7rem] text-ink-mute">
-          没有账号系统。身份存在这台设备上，换手机需要重新设置。
+          不用注册。昵称和头像只记在这台手机上，换手机要重新设一次。
         </p>
       </section>
 
@@ -196,7 +196,7 @@ export const Lobby = () => {
             />
             <Toggle
               label="允许观战"
-              hint="没座位的人可以看公开信息，看不到任何身份"
+              hint="没上桌的人可以旁观，但看不到任何人的身份"
               checked={allowSpectators}
               onChange={setAllowSpectators}
             />

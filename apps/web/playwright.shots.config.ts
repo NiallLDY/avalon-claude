@@ -3,7 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 /** 截图用。跟回归测试分开，免得每次跑 e2e 都去拍一整局 */
 export default defineConfig({
   testDir: "./e2e-shots",
-  timeout: 180_000,
+  timeout: 300_000,
   expect: { timeout: 15_000 },
   workers: 1,
   reporter: [["list"]],

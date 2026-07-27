@@ -44,6 +44,11 @@ export const config = {
   finishedRoomMs: num("FINISHED_ROOM_MS", 120 * MINUTE),
   /** 房主掉线多久后自动移交给座位号最小的在线玩家 */
   hostTransferAfterMs: num("HOST_TRANSFER_AFTER_MS", MINUTE),
+  /**
+   * 结果类阶段（揭票、任务结算、翻忠诚牌）自动推进的等待时间。
+   * 这些阶段只是给人看结果，没道理卡在等房主点一下 —— 房主可以点「立即继续」提前。
+   */
+  autoAdvanceMs: num("AUTO_ADVANCE_MS", 6_000),
   /** GC 扫描间隔 */
   sweepIntervalMs: num("SWEEP_INTERVAL_MS", MINUTE),
   /** 房间快照写 Redis 的防抖间隔 */

@@ -28,7 +28,7 @@ const openApp = async (page: Page, nick: string) => {
 };
 
 test("拍完整一局", async ({ browser }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(300_000);
   await mkdir(OUT, { recursive: true });
 
   const NICKS = ["阿隆", "小梅", "老王", "阿飞", "球球"];
@@ -87,9 +87,22 @@ test("拍完整一局", async ({ browser }) => {
     await page.getByRole("button", { name: "我已看牌" }).click();
   }
 
+  /** 所有人的结果弹窗都点掉，然后房主点「立即继续」跳过自动推进的等待 */
+  const dismissAll = async () => {
+    for (const page of pages) {
+      const ok = page.getByRole("button", { name: "知道了" });
+      if (await ok.isVisible().catch(() => false)) await ok.click();
+    }
+    const skip = host.getByRole("button", { name: "立即继续" });
+    if (await skip.isVisible().catch(() => false)) await skip.click();
+  };
+
   /** 打一轮：提名 → 全票通过 → 出牌 */
   const playRound = async (failIt: boolean) => {
-    // 找到当前队长那一页
+    // **先等阶段真的到了组队**，再找队长。
+    // 结果阶段是服务端定时自动推进的，抢在它之前找队长必然找不到。
+    await expect(host.getByText(/挑 \d+ 个人/)).toBeVisible();
+
     let leader = host;
     for (const page of pages) {
       if (await page.getByRole("button", { name: /选 \d+ 个人|^确认 \d/ }).isVisible().catch(() => false)) {
@@ -97,11 +110,10 @@ test("拍完整一局", async ({ browser }) => {
         break;
       }
     }
-    await expect(leader.getByText(/队长选择队员/)).toBeVisible();
     await shot(leader, failIt ? "组队" : "组队-2");
 
     // 依次点座位直到凑够人数
-    const need = Number((await leader.getByText(/需要 \d+ 人/).textContent())!.match(/\d+/)![0]);
+    const need = Number((await leader.getByText(/挑 \d+ 个人/).textContent())!.match(/\d+/)![0]);
     const seatButtons = leader.locator("button.absolute:not([disabled])");
     for (let i = 0; i < need; i++) await seatButtons.nth(i).click();
     await shot(leader, "组队-已选");
@@ -113,9 +125,10 @@ test("拍完整一局", async ({ browser }) => {
       await page.getByRole("button", { name: "赞成" }).click();
     }
 
-    await expect(host.getByText(/队伍通过/)).toBeVisible();
-    await shot(host, "揭票");
-    await host.getByRole("button", { name: "继续" }).click();
+    // 结果弹窗盖住屏幕，要玩家自己点掉；后台会自动往下走
+    await expect(host.locator("p.font-display").filter({ hasText: /^(上车|翻车)$/ })).toBeVisible();
+    await shot(host, "揭票弹窗");
+    await dismissAll();
 
     await expect(host.getByText(/队员执行任务/)).toBeVisible();
     // 上车的人出牌
@@ -131,9 +144,9 @@ test("拍完整一局", async ({ browser }) => {
       }
     }
 
-    await expect(host.getByText(/任务(成功|失败)/)).toBeVisible();
-    await shot(host, failIt ? "任务失败" : "任务成功");
-    await host.getByRole("button", { name: "继续" }).click();
+    await expect(host.locator("p.font-display").filter({ hasText: /^任务(成功|失败)$/ })).toBeVisible();
+    await shot(host, failIt ? "任务失败弹窗" : "任务成功弹窗");
+    await dismissAll();
   };
 
   await playRound(false);

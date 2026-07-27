@@ -18,8 +18,11 @@ import { createCounter, createRateLimiter } from "./ratelimit.js";
 import type { Registry } from "./registry.js";
 import type { Store } from "./store.js";
 import {
+  advanceAutomatically,
   applyAction,
+  isAutoAdvancePhase,
   isHost,
+  phaseStamp,
   joinRoom,
   kick,
   leaveRoom,
@@ -74,6 +77,35 @@ export const attachSocket = (io: IOServer, registry: Registry, store: Store): vo
       socket.emit("state", stateFor(room, data.playerId));
     }
     store.save(room);
+    scheduleAutoAdvance(room);
+  };
+
+  /**
+   * 结果类阶段到点自动往下走。房主仍可点「立即继续」提前。
+   * 定时器按房间维护，每次状态推送时重排 —— 阶段变了旧的自然作废。
+   */
+  const autoTimers = new Map<string, NodeJS.Timeout>();
+
+  const scheduleAutoAdvance = (room: Room): void => {
+    const existing = autoTimers.get(room.id);
+    if (existing) {
+      clearTimeout(existing);
+      autoTimers.delete(room.id);
+    }
+    if (!isAutoAdvancePhase(room)) return;
+
+    const stamp = phaseStamp(room);
+    const timer = setTimeout(() => {
+      autoTimers.delete(room.id);
+      // 这期间有人抢先推进过就别再推了，否则会连跳一个阶段
+      if (phaseStamp(room) !== stamp) return;
+      const result = advanceAutomatically(room, now());
+      if (!result?.ok) return;
+      pushRoom(room);
+      pushEvents(room, result.events);
+    }, config.autoAdvanceMs);
+    timer.unref();
+    autoTimers.set(room.id, timer);
   };
 
   /** 一次性提示（播动画音效用），不含机密，可以群发 */
@@ -355,7 +387,14 @@ export const attachSocket = (io: IOServer, registry: Registry, store: Store): vo
   // 定时清扫：回收空房间 + 房主自动移交
   const timer = setInterval(() => {
     const { collected, hostChanged } = registry.sweep(now());
-    for (const id of collected) void store.remove(id);
+    for (const id of collected) {
+      const timer = autoTimers.get(id);
+      if (timer) {
+        clearTimeout(timer);
+        autoTimers.delete(id);
+      }
+      void store.remove(id);
+    }
     for (const id of hostChanged) {
       const room = registry.get(id);
       if (room) pushRoom(room);

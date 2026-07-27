@@ -1,0 +1,127 @@
+/**
+ * 结果弹窗：投票通过/否决、任务成功/失败、忠诚牌翻牌。
+ *
+ * 这些结果原本只是主界面上的一行小字，一晃就过去了 ——
+ * 而它们恰恰是全场要一起看到、要据此吵起来的东西。
+ * 所以做成盖住屏幕的弹窗，**由玩家自己点掉**，
+ * 后台该往下走就往下走，不会因为谁没关弹窗卡住全场。
+ */
+
+import type { PublicPlayer } from "@avalon/shared";
+import { PlayerChip, PlayerChips } from "./PlayerChip.js";
+import { Button } from "./ui.js";
+import { useStore, type ResultCard } from "../store.js";
+
+/**
+ * selector 里**不能**写 `?? []` —— 那样每次调用都返回一个新数组，
+ * zustand 按引用比较就认为状态变了，直接无限重渲染（React error #185）。
+ * 兜底值要放在 selector 外面，用一个稳定的常量。
+ */
+const NO_PLAYERS: readonly PublicPlayer[] = [];
+
+export const ResultOverlay = () => {
+  const card = useStore((s) => s.result);
+  const dismiss = useStore((s) => s.dismissResult);
+  const seated = useStore((s) => s.state?.room.seated) ?? NO_PLAYERS;
+  if (!card) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-6">
+      <div className="w-full max-w-sm rounded-2xl border border-line bg-surface p-5 text-center">
+        <Body card={card} seated={seated} />
+        <Button className="mt-5 w-full" onClick={dismiss}>
+          知道了
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+const Body = ({
+  card,
+  seated,
+}: {
+  card: ResultCard;
+  seated: readonly PublicPlayer[];
+}) => {
+  if (card.kind === "VOTE") {
+    const yes = card.votes.filter(Boolean).length;
+    return (
+      <>
+        <p className={`font-display text-3xl ${card.approved ? "text-blue" : "text-red"}`}>
+          {card.approved ? "上车" : "翻车"}
+        </p>
+        <p className="mt-1 text-sm text-ink-soft">
+          {yes} 票赞成 · {card.votes.length - yes} 票反对
+        </p>
+
+        <div className="mt-4 space-y-3 text-left">
+          <div>
+            <p className="mb-1.5 text-xs text-ink-mute">这一车</p>
+            <PlayerChips seated={seated} seats={card.team} tone="gold" />
+          </div>
+          <div>
+            <p className="mb-1.5 text-xs text-ink-mute">谁投了什么</p>
+            <div className="flex flex-wrap gap-1">
+              {card.votes.map((approve, seat) => (
+                <PlayerChip
+                  key={seat}
+                  player={seated[seat]}
+                  seat={seat}
+                  tone={approve ? "blue" : "red"}
+                  mark={approve ? "✓" : "✗"}
+                  showNick={false}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {!card.approved ? (
+          <p className="mt-4 text-xs text-ink-mute">
+            连续第 {card.rejectStreak} 次没上车，满 5 次这一局就输了
+          </p>
+        ) : null}
+      </>
+    );
+  }
+
+  if (card.kind === "MISSION") {
+    return (
+      <>
+        <p className={`font-display text-3xl ${card.success ? "text-blue" : "text-red"}`}>
+          {card.success ? "任务成功" : "任务失败"}
+        </p>
+        <p className="mt-1 text-sm text-ink-soft">
+          {card.failCount === 0
+            ? "没有人放失败牌"
+            : `${card.failCount} 张失败牌`}
+          {card.failsRequired === 2 ? "（这一轮要 2 张才算失败）" : ""}
+        </p>
+
+        <div className="mt-4 text-left">
+          <p className="mb-1.5 text-xs text-ink-mute">执行这次任务的是</p>
+          <PlayerChips seated={seated} seats={card.team} tone="gold" />
+        </div>
+
+        <p className="mt-4 text-xs text-ink-mute">牌是打乱的，谁放的失败牌只有他自己知道</p>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <p className="font-display text-3xl text-gold">忠诚牌</p>
+      <p className="mt-3 text-sm text-ink-soft">
+        {card.swapped === null
+          ? "翻开了一张，内容不公开"
+          : card.swapped
+            ? "两位兰斯洛特互换了阵营"
+            : "阵营不变"}
+      </p>
+      {card.swapped !== false ? (
+        <p className="mt-3 text-xs text-ink-mute">兰斯洛特可以打开身份卡确认自己现在是哪一边</p>
+      ) : null}
+    </>
+  );
+};

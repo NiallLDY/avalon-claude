@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import { ROLES, TEAM_SIZE, isProtectedRound, type ClientGameView } from "@avalon/shared";
+import { PlayerChips } from "../components/PlayerChip.js";
 import { SeatRing } from "../components/SeatRing.js";
 import { RoleCard } from "../components/RoleCard.js";
 import { Button, Sheet } from "../components/ui.js";
@@ -179,10 +180,26 @@ export const Game = () => {
         ) : null}
       </SeatRing>
 
-      <p className="shrink-0 px-4 py-1 text-center text-sm text-ink-soft">
-        {PHASE_HINT[phase ?? ""] ?? ""}
-        {phase === "TEAM_BUILD" ? ` · 需要 ${game.teamSize} 人` : ""}
-      </p>
+      {/*
+        阶段条。**车队必须在这里明明白白列出来** ——
+        投票要判断的就是这一车，只靠头像上一圈金边根本看不见。
+      */}
+      <div className="shrink-0 px-4 py-1 text-center">
+        {game.team && game.team.length > 0 ? (
+          <div className="mb-1 rounded-xl bg-surface px-3 py-2">
+            <p className="mb-1.5 text-[0.7rem] text-ink-mute">
+              {phase === "MISSION" ? "正在执行任务的是" : "这一车"}
+            </p>
+            <div className="flex justify-center">
+              <PlayerChips seated={room.seated} seats={game.team} tone="gold" />
+            </div>
+          </div>
+        ) : null}
+        <p className="text-sm text-ink-soft">
+          {PHASE_HINT[phase ?? ""] ?? ""}
+          {phase === "TEAM_BUILD" ? ` · 挑 ${game.teamSize} 个人` : ""}
+        </p>
+      </div>
 
       {/* 操作区 —— 唯一随阶段变化的部分，固定在拇指可达区 */}
       <div className="shrink-0 space-y-2 px-4 pt-1">
@@ -344,12 +361,13 @@ const Actions = ({
     case "VOTE_RESULT":
     case "MISSION_RESULT":
     case "LOYALTY_FLIP":
+      // 服务端会自动往下走，这里只给房主一个提前的口子
       return isHost ? (
-        <Button className="w-full" onClick={() => onAct({ type: "ADVANCE" })}>
-          继续
+        <Button tone="ghost" className="w-full" onClick={() => onAct({ type: "ADVANCE" })}>
+          立即继续
         </Button>
       ) : (
-        <p className="py-3 text-center text-sm text-ink-mute">等房主继续</p>
+        <p className="py-3 text-center text-sm text-ink-mute">马上继续…</p>
       );
 
     case "LADY_OF_LAKE":

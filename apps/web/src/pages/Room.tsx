@@ -222,7 +222,7 @@ export const Room = () => {
           <section className="rounded-xl bg-surface-2 p-3">
             <div className="mb-2 flex items-baseline justify-between">
               <span className="text-sm font-medium">{count} 人局</span>
-              <span className="text-[0.7rem] text-ink-mute">人数 = 实际入座人数</span>
+              <span className="text-[0.7rem] text-ink-mute">上桌几个人就是几人局</span>
             </div>
             <RoleComposition count={count} mode={s.mode} />
           </section>
@@ -259,7 +259,7 @@ export const Room = () => {
             />
             <Toggle
               label="提前刺杀"
-              hint="完成 2 次任务后，刺客可主动发起刺杀；失败红方立即判负"
+              hint="打完 2 次任务后，刺客可以随时动手；刺错人红方当场输"
               checked={s.earlyAssassination}
               disabled={!host}
               onChange={(earlyAssassination) => patch({ earlyAssassination })}
@@ -292,7 +292,7 @@ export const Room = () => {
               </div>
               <Toggle
                 label="隐藏翻牌结果"
-                hint="全体只知道翻了一张；兰斯洛特本人始终能看到自己的当前阵营"
+                hint="别人只知道翻了一张牌，兰斯洛特自己仍能看到现在站哪边"
                 checked={s.hideLoyaltyFlipResult}
                 disabled={!host}
                 onChange={(hideLoyaltyFlipResult) => patch({ hideLoyaltyFlipResult })}

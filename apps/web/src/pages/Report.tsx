@@ -88,7 +88,7 @@ export const Report = ({
               <PlayerChip player={seated[c.holderSeat]} seat={c.holderSeat} tone="gold" />
               <span>查验了</span>
               <PlayerChip player={seated[c.targetSeat]} seat={c.targetSeat} />
-              <span>（结果只有查验人知道）</span>
+              <span>（查到什么只有女神本人知道）</span>
             </li>
           ))}
         </ul>
@@ -110,7 +110,7 @@ export const Report = ({
     ) : null}
 
     <p className="pt-1 text-center text-[0.7rem] text-ink-mute">
-      每张任务牌是谁出的，服务器不会告诉任何人 —— 包括现在
+      任务牌不记名。谁放的失败牌，只有他自己知道
     </p>
   </div>
 );
