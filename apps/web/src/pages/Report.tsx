@@ -4,6 +4,7 @@
  */
 
 import type { ClientGameView, PublicPlayer } from "@avalon/shared";
+import { labeler } from "../lib/labels.js";
 
 export const Report = ({
   game,
@@ -12,7 +13,7 @@ export const Report = ({
   game: ClientGameView;
   seated: readonly PublicPlayer[];
 }) => {
-  const nickOf = (seat: number) => seated[seat]?.nick ?? `${seat + 1} 号`;
+  const who = labeler(seated);
 
   return (
     <div className="space-y-4 pb-2 text-sm">
@@ -47,13 +48,18 @@ export const Report = ({
                       {p.approved ? "通过" : "否决"}
                     </span>
                     <span className="text-ink-mute">
-                      队长 {nickOf(p.leaderSeat)} → {p.team.map(nickOf).join("、")}
+                      队长 {who.full(p.leaderSeat)} → {who.list(p.team)}
                     </span>
                   </div>
-                  <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-ink-mute">
+                  {/* 10 个人的投票要排得下，这里只用号码 —— 号码本来就是主语 */}
+                  <div className="mt-1 flex flex-wrap gap-1">
                     {p.votes.map((approve, seat) => (
-                      <span key={seat} className={approve ? "text-blue/80" : "text-red/80"}>
-                        {nickOf(seat)}
+                      <span
+                        key={seat}
+                        className={`rounded px-1 py-0.5 text-[0.65rem] leading-none
+                          ${approve ? "bg-blue/20 text-blue" : "bg-red/20 text-red"}`}
+                      >
+                        {who.short(seat)}
                         {approve ? "✓" : "✗"}
                       </span>
                     ))}
@@ -71,7 +77,7 @@ export const Report = ({
           <ul className="space-y-1 text-xs text-ink-mute">
             {game.lady.checks.map((c, i) => (
               <li key={i}>
-                第 {c.afterRoundIndex + 1} 轮后：{nickOf(c.holderSeat)} 查验了 {nickOf(c.targetSeat)}
+                第 {c.afterRoundIndex + 1} 轮后：{who.full(c.holderSeat)} 查验了 {who.full(c.targetSeat)}
                 <span className="text-ink-mute">（结果只有查验人知道）</span>
               </li>
             ))}

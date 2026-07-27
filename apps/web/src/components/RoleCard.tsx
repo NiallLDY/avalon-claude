@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ROLES, type ClientGameView, type PublicPlayer } from "@avalon/shared";
 import { loadArtStyle } from "../lib/identity.js";
+import { labeler } from "../lib/labels.js";
 
 const HOLD_MS = 1200;
 
@@ -31,7 +32,7 @@ export const RoleCard = ({
   }
 
   const meta = ROLES[me.roleId];
-  const nickOf = (seat: number) => seated[seat]?.nick ?? `${seat + 1} 号`;
+  const who = labeler(seated);
 
   const beginHold = () => {
     start.current = performance.now();
@@ -107,9 +108,9 @@ export const RoleCard = ({
           {me.vision.evilSeats.length > 0 ? (
             <p>
               <span className="text-red">红方</span>：
-              {me.vision.evilSeats
-                .map((s) => nickOf(s) + (me.vision.lancelotSeats.includes(s) ? "（兰斯洛特）" : ""))
-                .join("、")}
+              {who.list(me.vision.evilSeats, (s) =>
+                me.vision.lancelotSeats.includes(s) ? "（兰斯洛特）" : "",
+              )}
             </p>
           ) : null}
 
@@ -117,7 +118,7 @@ export const RoleCard = ({
             <p>
               这两人里一个是<span className="text-blue">梅林</span>，一个是
               <span className="text-red">莫甘娜</span>：
-              {me.vision.merlinCandidates.map(nickOf).join("、")}
+              {who.list(me.vision.merlinCandidates)}
             </p>
           ) : null}
 
@@ -125,7 +126,7 @@ export const RoleCard = ({
             <p>
               女神查验：
               {me.myLadyChecks
-                .map((c) => `${nickOf(c.targetSeat)} 是${c.side === "RED" ? "红方" : "蓝方"}`)
+                .map((c) => `${who.full(c.targetSeat)} 是${c.side === "RED" ? "红方" : "蓝方"}`)
                 .join("、")}
             </p>
           ) : null}

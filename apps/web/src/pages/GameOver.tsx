@@ -7,6 +7,7 @@ import { ROLES, type ClientGameView } from "@avalon/shared";
 import { SeatRing } from "../components/SeatRing.js";
 import { Button, Sheet } from "../components/ui.js";
 import { Report } from "./Report.js";
+import { labeler } from "../lib/labels.js";
 import { selfId, useStore } from "../store.js";
 
 const REASON: Record<string, string> = {
@@ -41,7 +42,7 @@ export const GameOver = ({ game }: { game: ClientGameView }) => {
         <p className="mt-1 text-xs text-ink-mute">{REASON[outcome.reason] ?? ""}</p>
         {outcome.assassinatedSeat !== null ? (
           <p className="mt-0.5 text-xs text-ink-mute">
-            刺客选择了 {room.seated[outcome.assassinatedSeat]?.nick ?? "?"}
+            刺客选择了 {labeler(room.seated).full(outcome.assassinatedSeat)}
           </p>
         ) : null}
       </header>

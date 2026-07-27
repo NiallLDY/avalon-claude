@@ -97,7 +97,7 @@ test("拍完整一局", async ({ browser }) => {
     // 找到当前队长那一页
     let leader = host;
     for (const page of pages) {
-      if (await page.getByRole("button", { name: /确认队伍/ }).isVisible().catch(() => false)) {
+      if (await page.getByRole("button", { name: /选 \d+ 个人|^确认 \d/ }).isVisible().catch(() => false)) {
         leader = page;
         break;
       }
@@ -110,7 +110,7 @@ test("拍完整一局", async ({ browser }) => {
     const seatButtons = leader.locator("button.absolute:not([disabled])");
     for (let i = 0; i < need; i++) await seatButtons.nth(i).click();
     await shot(leader, "组队-已选");
-    await leader.getByRole("button", { name: /确认队伍/ }).click();
+    await leader.getByRole("button", { name: /^确认 \d/ }).click();
 
     await expect(host.getByText("全体投票")).toBeVisible();
     await shot(host, "投票");

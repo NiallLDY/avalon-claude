@@ -18,6 +18,7 @@ import {
 } from "@avalon/shared";
 import { SeatRing } from "../components/SeatRing.js";
 import { Button, Segmented, Sheet, Toggle } from "../components/ui.js";
+import { labeler } from "../lib/labels.js";
 import { selfId, useStore } from "../store.js";
 
 /**
@@ -83,14 +84,18 @@ export const Room = () => {
   const swap = room.pendingSwap;
   const incomingSwap = swap?.toPlayerId === selfId ? swap : null;
   const outgoingSwap = swap?.fromPlayerId === selfId ? swap : null;
-  const nickOf = (id: string) => room.seated.find((p) => p.id === id)?.nick ?? "某人";
+  const who = labeler(room.seated);
+  const labelOf = (id: string) => {
+    const seat = room.seated.findIndex((p) => p.id === id);
+    return seat >= 0 ? who.full(seat) : "某人";
+  };
 
   const requestSwap = (seat: number) => {
     const target = room.seated[seat];
     if (!target || target.id === selfId) return;
     emit("room:requestSwap", { targetPlayerId: target.id });
     setSwapMode(false);
-    toast(`已向 ${target.nick} 发出换座请求`);
+    toast(`已向 ${who.full(seat)} 发出换座请求`);
   };
 
   return (
@@ -143,8 +148,7 @@ export const Room = () => {
         {incomingSwap ? (
           <div className="rounded-xl border border-gold/50 bg-gold/10 p-3">
             <p className="text-sm">
-              <span className="text-gold">{nickOf(incomingSwap.fromPlayerId)}</span>
-              （{incomingSwap.fromSeat + 1} 号）想和你换座位
+              <span className="text-gold">{labelOf(incomingSwap.fromPlayerId)}</span> 想和你换座位
             </p>
             <div className="mt-2 flex gap-2">
               <Button
@@ -164,7 +168,7 @@ export const Room = () => {
           </div>
         ) : outgoingSwap ? (
           <p className="text-center text-xs text-gold">
-            等 {nickOf(outgoingSwap.toPlayerId)} 回应换座请求…
+            等 {labelOf(outgoingSwap.toPlayerId)} 回应换座请求…
           </p>
         ) : null}
 

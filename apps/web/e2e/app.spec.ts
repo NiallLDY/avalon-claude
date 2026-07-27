@@ -156,3 +156,33 @@ test.describe("换座位", () => {
     await b.close();
   });
 });
+
+test.describe("座位号", () => {
+  test("提到玩家的地方都要带号码 —— 线下全靠号码沟通", async ({ browser }) => {
+    // 两人局够验证「号码 + 昵称」的拼法，不需要凑满一局
+    const a = await browser.newContext({ locale: "zh-CN" });
+    const b = await browser.newContext({ locale: "zh-CN" });
+    const pa = await a.newPage();
+    const pb = await b.newPage();
+
+    await openApp(pa);
+    await pa.getByPlaceholder("你的昵称").fill("阿隆");
+    await pa.getByPlaceholder("你的昵称").blur();
+    const code = await createRoom(pa, "号码测试");
+
+    await openApp(pb);
+    await pb.getByPlaceholder("你的昵称").fill("小梅");
+    await pb.getByPlaceholder("你的昵称").blur();
+    await pb.getByPlaceholder("房间码").fill(code);
+    await pb.getByRole("button", { name: "进" }).click();
+    await expect(pa.getByText("2 人")).toBeVisible();
+
+    // 换座请求里必须出现「1号 阿隆」而不是光秃秃的「阿隆」
+    await pa.getByRole("button", { name: "换座位" }).click();
+    await pa.locator("button.absolute:not([disabled])").first().click();
+    await expect(pb.getByText(/1号 阿隆.*想和你换座位/)).toBeVisible();
+
+    await a.close();
+    await b.close();
+  });
+});

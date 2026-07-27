@@ -12,6 +12,7 @@ import { SeatRing } from "../components/SeatRing.js";
 import { RoleCard } from "../components/RoleCard.js";
 import { Button, Sheet } from "../components/ui.js";
 import { Report } from "./Report.js";
+import { labeler, seatNo } from "../lib/labels.js";
 import { selfId, useStore } from "../store.js";
 
 /** 顶部：5 轮任务进度 + 流局计数 */
@@ -174,6 +175,7 @@ export const Game = () => {
           isHost={isHost}
           onAct={act}
           seatCount={room.seated.length}
+          who={labeler(room.seated)}
         />
 
         <nav className="flex gap-2 pt-1">
@@ -206,12 +208,14 @@ const Actions = ({
   isHost,
   onAct,
   seatCount,
+  who,
 }: {
   game: ClientGameView;
   picked: readonly number[];
   isHost: boolean;
   onAct: ReturnType<typeof useStore.getState>["act"];
   seatCount: number;
+  who: ReturnType<typeof labeler>;
 }) => {
   const me = game.me;
   const [direction, setDirection] = useState<"CW" | "CCW">("CW");
@@ -266,7 +270,9 @@ const Actions = ({
               disabled={picked.length !== game.teamSize}
               onClick={() => onAct({ type: "PROPOSE_TEAM", team: [...picked], speakDirection: direction })}
             >
-              确认队伍 ({picked.length}/{game.teamSize})
+              {picked.length === 0
+                ? `选 ${game.teamSize} 个人`
+                : `确认 ${[...picked].sort((a, b) => a - b).map(seatNo).join(" ")} (${picked.length}/${game.teamSize})`}
             </Button>
           </div>
           {early}
@@ -339,7 +345,7 @@ const Actions = ({
           disabled={picked.length !== 1}
           onClick={() => onAct({ type: "LADY_CHECK", targetSeat: picked[0]! })}
         >
-          查验这个人
+          {picked[0] === undefined ? "选一个人查验" : `查验 ${who.full(picked[0])}`}
         </Button>
       );
 
@@ -353,7 +359,9 @@ const Actions = ({
       return (
         <div className="space-y-1">
           {knownAlly ? (
-            <p className="text-center text-xs text-red">这是你已知的红方队友，确定吗？</p>
+            <p className="text-center text-xs text-red">
+              {who.full(target)} 是你已知的红方队友，确定吗？
+            </p>
           ) : null}
           <Button
             tone="red"
@@ -361,7 +369,7 @@ const Actions = ({
             disabled={target === undefined || seatCount === 0}
             onClick={() => onAct({ type: "ASSASSINATE", targetSeat: target! })}
           >
-            刺杀 {target !== undefined ? `${target + 1} 号` : ""}
+            刺杀 {target !== undefined ? who.full(target) : ""}
           </Button>
         </div>
       );

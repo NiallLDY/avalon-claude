@@ -114,16 +114,19 @@ export const SeatRing = ({
                 ) : null}
               </span>
 
-              {/* 座位号 + 昵称。线下靠座位号对人 —— 「3 号出的失败牌」比描述头像好沟通得多 */}
-              <span className="flex w-full items-center justify-center gap-0.5">
+              {/*
+                座位号 + 昵称。线下全靠座位号沟通 ——「3 号出的失败牌」「不上 5 号的车」，
+                所以号码要比昵称更显眼，做成一块号牌。
+              */}
+              <span className="flex w-full items-center justify-center gap-1">
                 <span
-                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded
-                    text-[0.6rem] font-semibold leading-none
-                    ${isLeader ? "bg-gold text-ground" : "bg-surface-2 text-ink-mute"}`}
+                  className={`flex h-[1.15rem] min-w-[1.15rem] shrink-0 items-center justify-center
+                    rounded px-1 text-[0.72rem] font-bold leading-none tabular-nums
+                    ${isLeader ? "bg-gold text-ground" : "bg-surface-2 text-ink ring-1 ring-line"}`}
                 >
                   {seat + 1}
                 </span>
-                <span className="min-w-0 truncate text-[0.65rem] leading-tight text-ink-soft">
+                <span className="min-w-0 truncate text-[0.62rem] leading-tight text-ink-mute">
                   {player.nick}
                 </span>
               </span>
