@@ -19,12 +19,12 @@
     "percival": {
       "name": "派西维尔",
       "side": "BLUE",
-      "subject": "the young knight Percival, clean-shaven with keen watchful eyes, polished mail beneath a heraldic surcoat, holding a shield bearing a chalice, glancing warily to one side as though weighing which of two figures to believe, a faint grail-light behind him"
+      "subject": "an 18-year-old squire-knight Percival, clearly a teenager, golden blond hair, short and tousled, completely beardless with smooth youthful boyish skin, a slender slight build, light chainmail worn under a loose surcoat cloak, holding up a shield bearing a chalice close to his chest like a ward, clear wide watchful eyes glancing warily to one side as though weighing which of two figures to believe, a faint grail-light behind him"
     },
     "loyal-servant": {
       "name": "忠臣",
       "side": "BLUE",
-      "subject": "a steadfast common knight, loyal servant of Arthur, plain chainmail and a simple cross-emblazoned tabard, both hands resting on the pommel of a sword planted point-down before him, calm resolute open gaze, rows of banners fading into mist behind him"
+      "subject": "a 45-year-old veteran knight, loyal servant of Arthur, dark brown hair cropped short with greying temples, a thick greying beard covering his jaw and cheeks, a broad heavy build with wide massive shoulders, plain battle-worn chainmail scarred and dented with a simple cross-emblazoned tabard, both hands resting on the pommel of a sword planted point-down before him, a weathered face lined by years of war with an old scar across the bridge of his nose, calm resolute open gaze, rows of banners fading into mist behind him"
     },
     "lancelot-blue": {
       "name": "蓝兰斯洛特",
@@ -44,7 +44,7 @@
     "mordred": {
       "name": "莫德雷德",
       "side": "RED",
-      "subject": "the usurper Mordred, a dark iron crown on his brow, regal black armour with blood-red enamel, arms folded, a cold arrogant stare, his silhouette softly swallowed by creeping shadow at the edges, wisps of dark smoke curling around him, a ruined throne behind him"
+      "subject": "the usurper Mordred, pale sickly bone-white skin like a man who has never seen the sun, gaunt hollow sunken cheeks and a thin sharp emaciated face, platinum-silver hair slicked straight back off his brow, a dark iron crown on his brow, regal black armour with blood-red enamel, arms folded, a cold arrogant stare, his silhouette softly swallowed by creeping shadow at the edges, wisps of dark smoke curling around him, a ruined throne behind him"
     },
     "oberon": {
       "name": "奥伯伦",
@@ -54,11 +54,12 @@
     "minion": {
       "name": "爪牙",
       "side": "RED",
-      "subject": "a faceless minion of Mordred, an iron half-mask and deep hood leaving the face unreadable, worn brigandine armour, a gloved hand on a short sword, a subservient forward-leaning posture, ravens perched on broken stone behind him"
+      "subject": "a faceless minion of Mordred, wearing a full riveted iron great-helm with only a narrow horizontal eye-slit, no hood and no cloak of any kind, the bare metal helmet silhouette clearly readable against the background, broad shoulders in worn brigandine armour, a gloved hand on a short sword, a subservient forward-leaning posture, ravens perched on broken stone behind him"
     },
     "lancelot-red": {
       "name": "红兰斯洛特",
       "side": "RED",
+      "reference": "lancelot-blue",
       "subject": "the knight Lancelot fallen, unmistakably the same warrior but in blackened plate armour with red enamel, long dark hair, helm under one arm, a two-sided cloak turned so its crimson side faces the viewer, a greatsword lowered, grim and shadowed, a faint mirrored silhouette of himself behind him"
     }
   }

@@ -12,7 +12,11 @@ Melbourne 阿瓦隆 —— 线下面对面玩阿瓦隆时使用的**在线发牌
 
 ## 当前状态
 
-**M1：骨架搭建中。** `packages/shared` 已有常量表与角色元数据（41 个测试）。里程碑见 `PLAN.md §12`。
+**M2 完成：规则引擎已就绪**（126 个测试）。下一步 M3 服务端。里程碑见 `PLAN.md §12`。
+
+- `packages/shared` —— 常量表、角色元数据、画风注册表
+- `packages/engine` —— `setup` 发牌 / `vision` 视野 / `machine` 状态机 / `projection` 视图裁剪
+- 素材 —— 油画立绘 10 张在 `assets/roles/painterly/`，生成流水线见 `scripts/art/`
 
 ## 技术栈速查
 

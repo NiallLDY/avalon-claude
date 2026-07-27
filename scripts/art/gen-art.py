@@ -40,16 +40,25 @@ def build_prompt(style: dict, role_id: str) -> str:
     )
 
 
-def build_instruction(role_id: str, prompt: str) -> str:
+def build_instruction(role_id: str, prompt: str, ref_note: str | None) -> str:
     # "Do NOT resize or post-process" 是必须的：否则 codex 会自己写个缩放脚本把图糊掉。
-    return (
+    head = (
         f"Use your image generation tool (img_gen) to generate ONE image and save it "
         f"as ./{role_id}.png in the current directory. "
         f"Do NOT resize, crop, convert or post-process it in any way — save exactly what "
-        f"the tool returns. Do not write any helper scripts.\n\n"
-        f"Prompt: {prompt}\n\n"
-        f"After saving, print only the file size and pixel dimensions."
+        f"the tool returns. Do not write any helper scripts."
     )
+    if ref_note:
+        head += f"\n\n{ref_note}"
+    return f"{head}\n\nPrompt: {prompt}\n\nAfter saving, print only the file size and pixel dimensions."
+
+
+# 让同一个人物在不同卡面上保持同一张脸时用的默认说明
+DEFAULT_REF_NOTE = (
+    "Keep the SAME face, hairstyle and build as the character in the attached "
+    "reference image — it must read as the same person, only re-costumed and "
+    "re-lit. Do not change the facial structure, jawline, or hair length/texture."
+)
 
 
 def generate(style: dict, role_id: str, outdir: Path, force: bool) -> tuple[str, bool, str]:
@@ -57,12 +66,27 @@ def generate(style: dict, role_id: str, outdir: Path, force: bool) -> tuple[str,
     if target.exists() and not force:
         return role_id, True, f"已存在，跳过（--force 可覆盖）: {target.name}"
 
-    instruction = build_instruction(role_id, build_prompt(style, role_id))
+    role = style["roles"][role_id]
+    ref_id = role.get("reference")
+    ref_args: list[str] = []
+    ref_note: str | None = None
+
+    if ref_id:
+        ref_path = outdir / f"{ref_id}.png"
+        if not ref_path.exists():
+            return role_id, False, f"缺参考图 {ref_path.name}，请先生成 {ref_id}"
+        ref_note = role.get("referenceNote", DEFAULT_REF_NOTE)
+        # 关键：-i 是变长参数，不加 "--" 的话紧随其后的 prompt 会被当成第二张图路径吃掉，
+        # 结果 codex 以为没有 prompt、转去读空的 stdin 然后报错。别删这个分隔符。
+        ref_args = ["-i", str(ref_path), "--"]
+
+    instruction = build_instruction(role_id, build_prompt(style, role_id), ref_note)
     cmd = [
         "codex", "exec",
         "-C", str(outdir),
         "--sandbox", "workspace-write",
         "--skip-git-repo-check",
+        *ref_args,
         instruction,
     ]
     try:
@@ -105,17 +129,24 @@ def main() -> int:
     print(f"风格 {style['styleId']}（{style['displayName']}）· {len(role_ids)} 个角色 · 并发 {args.jobs}")
     print(f"输出目录 {outdir}\n")
 
+    # 带参考图的角色必须等参考图先出来，所以分两批跑
+    waves = [
+        [r for r in role_ids if not style["roles"][r].get("reference")],
+        [r for r in role_ids if style["roles"][r].get("reference")],
+    ]
+
     failed = []
-    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        futures = [
-            pool.submit(generate, style, rid, outdir, args.force) for rid in role_ids
-        ]
-        for fut in futures:
-            role_id, ok, msg = fut.result()
-            name = style["roles"][role_id]["name"]
-            print(f"{'✅' if ok else '❌'} {role_id:16s} {name:8s} {msg}")
-            if not ok:
-                failed.append(role_id)
+    for wave in waves:
+        if not wave:
+            continue
+        with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+            futures = [pool.submit(generate, style, rid, outdir, args.force) for rid in wave]
+            for fut in futures:
+                role_id, ok, msg = fut.result()
+                name = style["roles"][role_id]["name"]
+                print(f"{'✅' if ok else '❌'} {role_id:16s} {name:8s} {msg}")
+                if not ok:
+                    failed.append(role_id)
 
     if failed:
         print(f"\n失败 {len(failed)} 个: {' '.join(failed)}", file=sys.stderr)
