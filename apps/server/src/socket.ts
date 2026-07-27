@@ -10,13 +10,8 @@
  */
 
 import type { Server as IOServer, Socket } from "socket.io";
-import {
-  CLIENT_EVENTS,
-  profileSchema,
-  type ClientEventName,
-  type GameEvent,
-  type Profile,
-} from "@avalon/shared";
+import type { ClientEventName, GameEvent, Profile } from "@avalon/shared";
+import { CLIENT_EVENTS, profileSchema } from "@avalon/shared/schemas";
 import { config } from "./config.js";
 import { logger } from "./logger.js";
 import { createCounter, createRateLimiter } from "./ratelimit.js";

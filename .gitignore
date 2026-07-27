@@ -29,3 +29,6 @@ test-results/
 
 data/
 redis-data/
+
+# 由 apps/web/scripts/sync-art.mjs 生成，权威副本在 assets/
+apps/web/public/art/

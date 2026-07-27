@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+/**
+ * 设计基线。PLAN.md §8.3
+ * 只做暗色 —— 线下常常是昏暗环境，而且中世纪调性也对。
+ */
+@theme {
+  --color-ground: #0d0f17;
+  --color-surface: #151926;
+  --color-surface-2: #1c2130;
+  --color-line: #2a3145;
+
+  --color-ink: #e9e7e1;
+  --color-ink-soft: #b3b7c6;
+  --color-ink-mute: #7c8398;
+
+  /* 阵营色 */
+  --color-blue: #3b6fe0;
+  --color-blue-deep: #1b2a6b;
+  --color-red: #c0392b;
+  --color-red-deep: #4a0e0e;
+  --color-gold: #d8b36a;
+
+  --font-display: "Cinzel", "Noto Serif SC", serif;
+  /* 中文用系统字体栈 —— 引入几 MB 的中文 webfont 在手机上是灾难 */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans SC", sans-serif;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    /* 100dvh 而不是 vh：iOS 地址栏收起/展开时 vh 会跳，dvh 不会 */
+    height: 100dvh;
+    overscroll-behavior: none;
+  }
+
+  body {
+    height: 100dvh;
+    margin: 0;
+    background: var(--color-ground);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    /* 铁律 4：主界面单屏不滚动。要滚的内容自己开 overflow */
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #root {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* 手机上长按选中文字很碍事，只在需要的地方放开 */
+  button,
+  [role="button"] {
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+  }
+}
+
+@utility safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+@utility safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+}
+
+/** 轻微质感噪点，避免纯扁平的廉价感 */
+@utility grain {
+  position: relative;
+}
+@utility grain-after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+}

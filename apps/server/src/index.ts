@@ -8,7 +8,7 @@ import { resolve } from "node:path";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import { Server as IOServer } from "socket.io";
-import { roomOptionsSchema } from "@avalon/shared";
+import { roomOptionsSchema } from "@avalon/shared/schemas";
 import { config } from "./config.js";
 import { logger } from "./logger.js";
 import { createRegistry } from "./registry.js";
