@@ -12,11 +12,17 @@ Melbourne 阿瓦隆 —— 线下面对面玩阿瓦隆时使用的**在线发牌
 
 ## 当前状态
 
-**M2 完成：规则引擎已就绪**（126 个测试）。下一步 M3 服务端。里程碑见 `PLAN.md §12`。
+**M0–M8 全部完成，可部署运行。** 里程碑见 `PLAN.md §12`。
 
-- `packages/shared` —— 常量表、角色元数据、画风注册表
-- `packages/engine` —— `setup` 发牌 / `vision` 视野 / `machine` 状态机 / `projection` 视图裁剪
-- 素材 —— 油画立绘 10 张在 `assets/roles/painterly/`，生成流水线见 `scripts/art/`
+| 包 | 内容 |
+|---|---|
+| `packages/shared` | 常量表、角色元数据、客户端类型、画风注册表；Zod schema 在 `@avalon/shared/schemas` 子入口（**只有服务端 import**，别打进前端） |
+| `packages/engine` | `setup` 发牌 / `vision` 视野 / `machine` 状态机 / `projection` 视图裁剪 |
+| `apps/server` | Fastify + Socket.IO + Redis 快照 + 限流 |
+| `apps/web` | React 单屏客户端，PWA |
+| `assets/roles/` | 角色卡插画，生成流水线见 `scripts/art/` |
+
+187 个测试。部署见 `README.md`。
 
 ## 技术栈速查
 

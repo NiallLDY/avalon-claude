@@ -1,0 +1,51 @@
+# 生产编排。开发用 compose.dev.yaml。
+#
+#   ./scripts/deploy.sh    首次部署与后续更新都用这一条
+name: avalon
+
+services:
+  app:
+    build:
+      context: .
+      target: runtime
+    image: avalon-app:latest
+    restart: unless-stopped
+    init: true
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+      # 前面是 Caddy / cloudflared，取 X-Forwarded-For 才是真实客户端 IP，
+      # 否则所有人的建房限流会共用同一个「IP」
+      TRUST_PROXY: "1"
+    # 只监听回环：公网入口一律走 Caddy，容器端口不直接暴露
+    ports:
+      - "127.0.0.1:8787:3000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    init: true
+    # 房间快照是短生命周期数据，AOF 足够；丢几秒不影响正确性
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  redis-data:
