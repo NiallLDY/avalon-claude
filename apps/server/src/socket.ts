@@ -25,6 +25,8 @@ import {
   leaveRoom,
   markDisconnected,
   reorderSeats,
+  requestSwap,
+  respondSwap,
   restartGame,
   setOptions,
   setSettings,
@@ -250,6 +252,16 @@ export const attachSocket = (io: IOServer, registry: Registry, store: Store): vo
         return;
       }
       reply(socket, shuffleSeats(room, now()), room);
+    });
+
+    on("room:requestSwap", ({ targetPlayerId }) => {
+      const room = currentRoom(socket);
+      if (room) reply(socket, requestSwap(room, socket.data.playerId, targetPlayerId, now()), room);
+    });
+
+    on("room:respondSwap", ({ accept }) => {
+      const room = currentRoom(socket);
+      if (room) reply(socket, respondSwap(room, socket.data.playerId, accept, now()), room);
     });
 
     on("room:settings", ({ settings }) => {

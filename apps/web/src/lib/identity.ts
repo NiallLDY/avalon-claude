@@ -11,6 +11,7 @@ const KEY_ID = "avalon.playerId";
 const KEY_TOKEN = "avalon.token";
 const KEY_PROFILE = "avalon.profile";
 const KEY_ART_STYLE = "avalon.artStyle";
+const KEY_LAST_ROOM = "avalon.lastRoom";
 
 const randomHex = (bytes: number): string =>
   Array.from(crypto.getRandomValues(new Uint8Array(bytes)))
@@ -65,3 +66,13 @@ export const saveProfile = (profile: Profile): void => {
 /** 角色卡画风是个人偏好，不进房间状态，也不影响服务端 */
 export const loadArtStyle = (): string => localStorage.getItem(KEY_ART_STYLE) ?? "painterly";
 export const saveArtStyle = (id: string): void => localStorage.setItem(KEY_ART_STYLE, id);
+
+/**
+ * 记住「我在哪个房间」。刷新页面时 socket 是全新的连接，
+ * 服务端虽然凭 playerId 还认得人、座位也留着，但它不知道该把状态推给哪个 socket ——
+ * 得由客户端把房间号补回去，否则一刷新就掉回大厅。
+ */
+export const saveLastRoom = (roomId: string): void =>
+  localStorage.setItem(KEY_LAST_ROOM, roomId);
+export const loadLastRoom = (): string | null => localStorage.getItem(KEY_LAST_ROOM);
+export const clearLastRoom = (): void => localStorage.removeItem(KEY_LAST_ROOM);

@@ -32,3 +32,7 @@ redis-data/
 
 # 由 apps/web/scripts/sync-art.mjs 生成，权威副本在 assets/
 apps/web/public/art/
+
+# playwright 产物
+apps/web/test-results/
+apps/web/playwright-report/

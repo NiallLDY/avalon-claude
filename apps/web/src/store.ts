@@ -13,9 +13,14 @@ import type {
   RoomSummary,
   StatePayload,
 } from "@avalon/shared";
-import { loadIdentity, loadProfile, saveProfile } from "./lib/identity.js";
-
-export type Screen = "LOBBY" | "ROOM";
+import {
+  clearLastRoom,
+  loadIdentity,
+  loadLastRoom,
+  loadProfile,
+  saveLastRoom,
+  saveProfile,
+} from "./lib/identity.js";
 
 interface Toast {
   readonly id: number;
@@ -23,19 +28,31 @@ interface Toast {
   readonly tone: "info" | "error";
 }
 
+/**
+ * 连接状态要分三态而不是布尔值。
+ * 只有 `connected` 一个布尔的话，页面刚加载时它必然是 false，
+ * 于是每次刷新都会闪一下"连接断开" —— 那是首次连接中，不是断线。
+ */
+export type ConnStatus = "connecting" | "connected" | "reconnecting";
+
 interface AppState {
   socket: Socket | null;
-  connected: boolean;
+  conn: ConnStatus;
   profile: Profile;
   rooms: readonly RoomSummary[];
   state: StatePayload | null;
-  /** 刚发生的一次性事件，用来播动画 */
+  /** 正在自动回房（刷新后恢复），此时不该把用户甩回大厅 */
+  restoring: boolean;
   lastEvent: GameEvent | null;
   toasts: readonly Toast[];
 
   connect: () => void;
   setProfile: (profile: Profile) => void;
-  createRoom: (opts: { name: string; visibility: "PUBLIC" | "PRIVATE"; allowSpectators: boolean }) => Promise<string | null>;
+  createRoom: (opts: {
+    name: string;
+    visibility: "PUBLIC" | "PRIVATE";
+    allowSpectators: boolean;
+  }) => Promise<string | null>;
   joinRoom: (roomId: string, asSpectator?: boolean) => void;
   leaveRoom: () => void;
   refreshRooms: (query?: string) => Promise<void>;
@@ -72,14 +89,17 @@ const ERROR_TEXT: Record<string, string> = {
   INVALID_LADY_TARGET: "这个人不能被查验",
   EARLY_ASSASSINATION_UNAVAILABLE: "提前刺杀还没解锁",
   GAME_OVER: "这局已经结束了",
+  SWAP_TARGET_BUSY: "对方正在处理别的换座请求",
+  NO_PENDING_SWAP: "这个换座请求已经失效了",
 };
 
 export const useStore = create<AppState>((set, get) => ({
   socket: null,
-  connected: false,
+  conn: "connecting",
   profile: loadProfile(),
   rooms: [],
   state: null,
+  restoring: loadLastRoom() !== null,
   lastEvent: null,
   toasts: [],
 
@@ -95,16 +115,41 @@ export const useStore = create<AppState>((set, get) => ({
       reconnectionDelayMax: 4_000,
     });
 
-    socket.on("connect", () => set({ connected: true }));
-    socket.on("disconnect", () => set({ connected: false }));
-    socket.on("state", (payload: StatePayload) => set({ state: payload }));
+    socket.on("connect", () => {
+      set({ conn: "connected" });
+      // 刷新或断线重连后自动回到原房间。
+      // 服务端凭 playerId 认人，座位和房主身份都还在，这里只要把「我在哪个房间」补回去。
+      const roomId = loadLastRoom();
+      if (roomId && !get().state) {
+        socket.emit("room:join", { roomId });
+      } else {
+        set({ restoring: false });
+      }
+    });
+
+    socket.on("disconnect", () => set({ conn: "reconnecting" }));
+
+    socket.on("state", (payload: StatePayload) => {
+      saveLastRoom(payload.room.id);
+      set({ state: payload, restoring: false });
+    });
+
     socket.on("room:list", ({ rooms }: { rooms: RoomSummary[] }) => set({ rooms }));
     socket.on("event", (event: GameEvent) => set({ lastEvent: event }));
+
     socket.on("error", ({ code, message }: { code: string; message: string }) => {
+      // 自动回房失败（房间已解散等）不该弹错，安静回大厅就行
+      if (get().restoring && code === "ROOM_NOT_FOUND") {
+        clearLastRoom();
+        set({ restoring: false });
+        return;
+      }
       get().toast(ERROR_TEXT[code] ?? message ?? "出错了", "error");
     });
+
     socket.on("kicked", ({ reason }: { reason: string }) => {
-      set({ state: null });
+      clearLastRoom();
+      set({ state: null, restoring: false });
       get().toast(reason, "error");
     });
 
@@ -114,7 +159,8 @@ export const useStore = create<AppState>((set, get) => ({
   setProfile: (profile) => {
     saveProfile(profile);
     set({ profile });
-    get().socket?.emit("room:profile", profile);
+    // 只有在房间里才需要同步给服务端；调用方保证 nick 已清洗且非空
+    if (get().state) get().socket?.emit("room:profile", profile);
   },
 
   createRoom: async (opts) => {
@@ -138,7 +184,8 @@ export const useStore = create<AppState>((set, get) => ({
 
   leaveRoom: () => {
     get().socket?.emit("room:leave", {});
-    set({ state: null });
+    clearLastRoom();
+    set({ state: null, restoring: false });
   },
 
   refreshRooms: async (query) => {
@@ -162,6 +209,3 @@ export const useStore = create<AppState>((set, get) => ({
 }));
 
 export const selfId = identity.playerId;
-
-/** 当前该显示哪个屏 */
-export const useScreen = (): Screen => useStore((s) => (s.state ? "ROOM" : "LOBBY"));

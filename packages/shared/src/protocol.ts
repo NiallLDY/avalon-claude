@@ -84,6 +84,8 @@ export const CLIENT_EVENT_NAMES = [
   "room:stand",
   "room:reorder",
   "room:shuffleSeats",
+  "room:requestSwap",
+  "room:respondSwap",
   "room:settings",
   "room:options",
   "room:kick",
@@ -108,6 +110,14 @@ export interface PublicPlayer {
   readonly isHost: boolean;
 }
 
+/** 一次待处理的换座请求。线下常常临时挪位置，得让玩家自己能换 */
+export interface PendingSwap {
+  readonly fromPlayerId: string;
+  readonly toPlayerId: string;
+  readonly fromSeat: number;
+  readonly toSeat: number;
+}
+
 export interface RoomView {
   readonly id: string;
   readonly name: string;
@@ -122,6 +132,8 @@ export interface RoomView {
   /** 当前配置下能否开局；不能开时 `startBlockedReason` 说明原因 */
   readonly canStart: boolean;
   readonly startBlockedReason: string | null;
+  /** 当前待处理的换座请求，同一时刻只允许有一个 */
+  readonly pendingSwap: PendingSwap | null;
 }
 
 /** 大厅列表条目。刻意不含玩家身份、不含 IP */
@@ -153,7 +165,9 @@ export type ServerErrorCode =
   | "INVALID_PAYLOAD"
   | "RATE_LIMITED"
   | "CANNOT_START"
-  | "NOT_IN_GAME";
+  | "NOT_IN_GAME"
+  | "SWAP_TARGET_BUSY"
+  | "NO_PENDING_SWAP";
 
 export interface ServerEvents {
   state: (payload: StatePayload) => void;

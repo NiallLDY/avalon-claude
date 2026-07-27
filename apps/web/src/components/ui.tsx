@@ -99,10 +99,13 @@ export const Toasts = () => {
   );
 };
 
-/** 连不上时的横幅。手机场景下断线很常见，得让人知道不是自己点坏了 */
+/**
+ * 断线横幅。只在**曾经连上过又断了**时显示。
+ * 首次连接中不显示 —— 否则每次刷新页面都会闪一下"连接断开"，那是误报。
+ */
 export const ConnectionBanner = () => {
-  const connected = useStore((s) => s.connected);
-  if (connected) return null;
+  const conn = useStore((s) => s.conn);
+  if (conn !== "reconnecting") return null;
   return (
     <div className="shrink-0 bg-red/20 py-1 text-center text-xs text-red">
       连接断开，正在重连…

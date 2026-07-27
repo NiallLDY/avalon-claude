@@ -103,8 +103,18 @@ export const SeatRing = ({
               ) : null}
             </span>
 
-            <span className="w-full truncate text-[0.68rem] leading-tight text-ink-soft">
-              {player.nick}
+            {/* 座位号。线下靠它对人 —— 「3 号出的失败牌」比「那个头像是蓝的」好沟通得多 */}
+            <span className="flex w-full items-center justify-center gap-1">
+              <span
+                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded
+                  text-[0.6rem] font-semibold leading-none
+                  ${isLeader ? "bg-gold text-ground" : "bg-surface-2 text-ink-mute"}`}
+              >
+                {seat + 1}
+              </span>
+              <span className="min-w-0 truncate text-[0.68rem] leading-tight text-ink-soft">
+                {player.nick}
+              </span>
             </span>
 
             {/* 终局才揭晓身份 */}

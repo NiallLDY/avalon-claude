@@ -50,8 +50,13 @@ Melbourne 阿瓦隆 —— 线下面对面玩阿瓦隆时使用的**在线发牌
 ```bash
 ./scripts/dev.sh     # 起 server(:3000) + web(:5173) + redis(:6379)
 ./scripts/test.sh    # vitest；参数透传，如 ./scripts/test.sh vision --watch
+./scripts/e2e.sh     # Playwright 真浏览器测试（iPhone 视口）
 ./scripts/sh.sh      # 进容器 shell
 ```
+
+> **改前端就要跑 `./scripts/e2e.sh`。** vitest 那层直接走 socket 协议，
+> 绕开了浏览器 —— 客户端状态管理的问题（刷新掉房、输入框误报、连接状态误判）
+> 在那一层一个都测不出来。
 
 容器内可用 `pnpm install / dev / test / typecheck / build`。
 node_modules 通过 bind mount 落在宿主机（同为 glibc x64），编辑器能直接解析类型。

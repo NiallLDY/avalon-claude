@@ -10,6 +10,50 @@ import { Button, Sheet, Toggle } from "../components/ui.js";
 import { randomAvatar } from "../lib/identity.js";
 import { useStore } from "../store.js";
 
+/**
+ * 昵称输入框。
+ *
+ * 之前的写法是每敲一个字就把原始值 setProfile 一次，而 setProfile 会往服务端 emit ——
+ * 于是「清空输入框重打」这个再正常不过的动作，中途必然发出一个空昵称，
+ * 被服务端 Zod 拒掉弹「参数不合法」；连打几个字还会撞上消息频率限制。
+ *
+ * 现在：输入框自己持有草稿，**只在失焦或按回车时**提交一次清洗过的值；
+ * 清洗后为空就回退到原昵称，不往服务端发。
+ */
+const NickInput = () => {
+  const { profile, setProfile } = useStore();
+  const [draft, setDraft] = useState(profile.nick);
+
+  // 外部改了昵称（比如换设备同步）时跟随
+  useEffect(() => setDraft(profile.nick), [profile.nick]);
+
+  const commit = () => {
+    const clean = sanitizeText(draft, NICK_MAX);
+    if (!clean) {
+      setDraft(profile.nick); // 空值不提交，视觉上回滚
+      return;
+    }
+    if (clean !== profile.nick) setProfile({ ...profile, nick: clean });
+    else setDraft(clean);
+  };
+
+  return (
+    <input
+      value={draft}
+      maxLength={NICK_MAX}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+      }}
+      placeholder="你的昵称"
+      enterKeyHint="done"
+      className="min-w-0 flex-1 rounded-lg bg-surface-2 px-3 py-2.5 text-base outline-none
+        focus:ring-1 focus:ring-gold/60"
+    />
+  );
+};
+
 export const Lobby = () => {
   const { profile, rooms, setProfile, createRoom, joinRoom, refreshRooms } = useStore();
   const [query, setQuery] = useState("");
@@ -58,17 +102,7 @@ export const Lobby = () => {
               🎲
             </span>
           </button>
-          <input
-            value={profile.nick}
-            maxLength={NICK_MAX}
-            onChange={(e) => setProfile({ ...profile, nick: e.target.value })}
-            onBlur={(e) =>
-              setProfile({ ...profile, nick: sanitizeText(e.target.value, NICK_MAX) || "无名氏" })
-            }
-            placeholder="你的昵称"
-            className="min-w-0 flex-1 rounded-lg bg-surface-2 px-3 py-2.5 text-base outline-none
-              focus:ring-1 focus:ring-gold/60"
-          />
+          <NickInput />
         </div>
         <p className="mt-2 text-[0.7rem] text-ink-mute">
           没有账号系统。身份存在这台设备上，换手机需要重新设置。

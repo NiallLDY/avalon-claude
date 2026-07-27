@@ -12,11 +12,13 @@ import {
   DEFAULT_SETTINGS,
   MAX_PLAYERS,
   MIN_PLAYERS,
+  LADY_MIN_PLAYERS,
   LANCELOT_MIN_PLAYERS,
   isValidPlayerCount,
   type Avatar,
   type ClientAction,
   type GameSettings,
+  type PendingSwap,
   type PublicPlayer,
   type RoomSummary,
   type RoomView,
@@ -61,6 +63,8 @@ export interface Room {
   updatedAt: number;
   /** 建房者 IP，用于并发房间数限制 */
   readonly ownerIp: string;
+  /** 待处理的换座请求。同一时刻只允许一个，避免多方互相抢座 */
+  pendingSwap: (PendingSwap & { readonly at: number }) | null;
 }
 
 export type RoomResult<T = void> =
@@ -85,6 +89,10 @@ export const startBlockedReason = (room: Room): string | null => {
   }
   if (room.settings.mode === "LANCELOT" && n < LANCELOT_MIN_PLAYERS) {
     return `兰斯洛特模式至少 ${LANCELOT_MIN_PLAYERS} 人`;
+  }
+  // 官方规则：湖中女神仅限 7 人及以上
+  if (room.settings.ladyOfTheLake && n < LADY_MIN_PLAYERS) {
+    return `湖中女神至少 ${LADY_MIN_PLAYERS} 人，现在 ${n} 人`;
   }
   if (room.seats.some((id) => !room.players.get(id)?.connected)) {
     return "有玩家掉线，等他回来或先请他离座";
@@ -119,6 +127,14 @@ export const roomView = (room: Room): RoomView => {
     inGame: room.game !== null,
     canStart: startBlockedReason(room) === null && room.game === null,
     startBlockedReason: room.game === null ? startBlockedReason(room) : null,
+    pendingSwap: room.pendingSwap
+      ? {
+          fromPlayerId: room.pendingSwap.fromPlayerId,
+          toPlayerId: room.pendingSwap.toPlayerId,
+          fromSeat: room.pendingSwap.fromSeat,
+          toSeat: room.pendingSwap.toSeat,
+        }
+      : null,
   };
 };
 
@@ -173,6 +189,7 @@ export const createRoom = (opts: {
     createdAt: opts.now,
     updatedAt: opts.now,
     ownerIp: opts.ownerIp,
+    pendingSwap: null,
   };
 };
 
@@ -230,6 +247,7 @@ export const markDisconnected = (room: Room, playerId: string, now: number): voi
   player.disconnectedAt = now;
   if (room.hostId === playerId) room.hostOfflineSince = now;
 
+  dropSwapInvolving(room, playerId);
   // 对局中掉线**不释放座位**，重连即恢复。没开局的观战者直接清掉，免得列表越积越长
   if (!isInGame(room) && !isSeated(room, playerId)) room.players.delete(playerId);
   touch(room, now);
@@ -261,6 +279,7 @@ export const leaveRoom = (room: Room, playerId: string, now: number): void => {
     markDisconnected(room, playerId, now);
     return;
   }
+  dropSwapInvolving(room, playerId);
   room.seats = room.seats.filter((id) => id !== playerId);
   room.players.delete(playerId);
   if (room.hostId === playerId) {
@@ -289,6 +308,7 @@ export const sit = (room: Room, playerId: string, now: number): RoomResult => {
 export const stand = (room: Room, playerId: string, now: number): RoomResult => {
   if (isInGame(room)) return err("ROOM_IN_GAME");
   if (!isSeated(room, playerId)) return err("NOT_SEATED");
+  dropSwapInvolving(room, playerId);
   if (!room.allowSpectators) {
     // 不允许观战的房间里，起立等于离开
     leaveRoom(room, playerId, now);
@@ -325,6 +345,83 @@ export const shuffleSeats = (room: Room, now: number): RoomResult => {
   room.seats = seats;
   touch(room, now);
   return ok(undefined);
+};
+
+/** 换座请求的有效期。超时自动作废，免得一个没人管的请求把对方卡住 */
+export const SWAP_REQUEST_TTL_MS = 60_000;
+
+const expireSwap = (room: Room, now: number): void => {
+  if (room.pendingSwap && now - room.pendingSwap.at > SWAP_REQUEST_TTL_MS) {
+    room.pendingSwap = null;
+  }
+};
+
+/**
+ * 向某人发起换座。线下常常临时挪位置，不能只有房主能调座次。
+ * 需要对方同意 —— 单方面就能把别人挪走的话，座次会被恶意打乱。
+ */
+export const requestSwap = (
+  room: Room,
+  fromId: string,
+  toId: string,
+  now: number,
+): RoomResult => {
+  if (isInGame(room)) return err("ROOM_IN_GAME");
+  if (fromId === toId) return err("不能和自己换座");
+
+  const fromSeat = seatOf(room, fromId);
+  const toSeat = seatOf(room, toId);
+  if (fromSeat < 0) return err("NOT_SEATED");
+  if (toSeat < 0) return err("对方不在座位上");
+  if (!room.players.get(toId)?.connected) return err("对方掉线了，等他回来");
+
+  expireSwap(room, now);
+  // 已经有别的请求在等回应就先排队，避免三个人互相换把座次搅乱
+  if (room.pendingSwap) return err("SWAP_TARGET_BUSY");
+
+  room.pendingSwap = { fromPlayerId: fromId, toPlayerId: toId, fromSeat, toSeat, at: now };
+  touch(room, now);
+  return ok(undefined);
+};
+
+/** 回应换座请求。只有被请求的人能回应 */
+export const respondSwap = (
+  room: Room,
+  responderId: string,
+  accept: boolean,
+  now: number,
+): RoomResult => {
+  expireSwap(room, now);
+  const pending = room.pendingSwap;
+  if (!pending) return err("NO_PENDING_SWAP");
+  if (pending.toPlayerId !== responderId) return err("NOT_YOUR_TURN");
+
+  room.pendingSwap = null;
+  if (!accept) {
+    touch(room, now);
+    return ok(undefined);
+  }
+
+  // 按 playerId 重新定位：请求发出后座次可能已经变过
+  const a = seatOf(room, pending.fromPlayerId);
+  const b = seatOf(room, pending.toPlayerId);
+  if (a < 0 || b < 0) return err("NOT_SEATED");
+
+  const seats = [...room.seats];
+  [seats[a], seats[b]] = [seats[b]!, seats[a]!];
+  room.seats = seats;
+  touch(room, now);
+  return ok(undefined);
+};
+
+/** 有人离座或掉线时，把牵涉到他的换座请求清掉 */
+export const dropSwapInvolving = (room: Room, playerId: string): void => {
+  if (
+    room.pendingSwap &&
+    (room.pendingSwap.fromPlayerId === playerId || room.pendingSwap.toPlayerId === playerId)
+  ) {
+    room.pendingSwap = null;
+  }
 };
 
 // ──────────────────────────── 房主操作 ────────────────────────────

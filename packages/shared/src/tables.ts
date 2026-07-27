@@ -104,6 +104,12 @@ export const ASSASSIN_ROLE_BY_MODE = {
 export const LADY_CHECK_AFTER_ROUNDS = [1, 2, 3] as const;
 
 /**
+ * 湖中女神的最低人数。**官方规则是 7 人及以上**，不是建议值。
+ * 人少时女神的信息量过大，会直接压塌红方。
+ */
+export const LADY_MIN_PLAYERS = 7;
+
+/**
  * 提前刺杀解锁条件（Q3 已定）：完成 2 次任务执行之后。
  * 注意是「已结算的任务数」，流局不计。GAME.md §10
  */

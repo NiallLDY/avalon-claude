@@ -65,6 +65,8 @@ const fromSnapshot = (snap: RoomSnapshot): Room => ({
   createdAt: snap.createdAt,
   updatedAt: snap.updatedAt,
   ownerIp: snap.ownerIp,
+  // 换座请求不跨进程重启保留 —— 双方都断开了，请求本来就该作废
+  pendingSwap: null,
 });
 
 export const createStore = () => {

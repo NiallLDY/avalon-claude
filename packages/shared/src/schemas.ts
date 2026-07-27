@@ -98,6 +98,10 @@ export const CLIENT_EVENTS = {
     order: z.array(playerIdSchema).min(MIN_PLAYERS).max(MAX_PLAYERS),
   }),
   "room:shuffleSeats": z.object({}),
+  /** 向某人发起换座 */
+  "room:requestSwap": z.object({ targetPlayerId: playerIdSchema }),
+  /** 回应收到的换座请求 */
+  "room:respondSwap": z.object({ accept: z.boolean() }),
   "room:settings": z.object({ settings: gameSettingsSchema }),
   "room:options": roomOptionsSchema.partial(),
   "room:kick": z.object({ playerId: playerIdSchema }),
