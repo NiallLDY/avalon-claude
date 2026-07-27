@@ -10,7 +10,8 @@ import { ROLES, type PlayerCount, type RoleId } from "@avalon/shared";
 import { seededRng } from "./rng.js";
 import { computeVision } from "./vision.js";
 import { assassinSeat, canEarlyAssassinate, createGame, ladyTargets, reduce } from "./machine.js";
-import type { Action, ErrorCode, GameSettings, GameState } from "./types.js";
+import type { ErrorCode, GameSettings } from "@avalon/shared";
+import type { Action, GameState } from "./types.js";
 
 // ──────────────────────────── 测试脚手架 ────────────────────────────
 

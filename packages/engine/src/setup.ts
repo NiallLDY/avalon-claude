@@ -13,11 +13,10 @@ import {
   isValidPlayerCount,
   type PlayerCount,
   type RoleId,
+  type GameMode,
   type Side,
 } from "@avalon/shared";
 import { shuffle, type Rng } from "./rng.js";
-
-export type GameMode = "STANDARD" | "LANCELOT";
 
 /** 取该人数 / 模式下的角色牌堆（未洗牌，顺序固定，便于测试） */
 export const roleDeck = (

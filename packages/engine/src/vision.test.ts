@@ -11,10 +11,11 @@ import {
   ROLES,
   SETUP_LANCELOT,
   isValidPlayerCount,
+  type GameMode,
   type PlayerCount,
   type RoleId,
 } from "@avalon/shared";
-import { dealRoles, roleDeck, canStart, type GameMode } from "./setup.js";
+import { dealRoles, roleDeck, canStart } from "./setup.js";
 import { computeVision } from "./vision.js";
 import { seededRng } from "./rng.js";
 

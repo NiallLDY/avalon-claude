@@ -12,7 +12,8 @@ import { seededRng } from "./rng.js";
 import { computeVision } from "./vision.js";
 import { createGame, ladyTargets, reduce } from "./machine.js";
 import { projectFor } from "./projection.js";
-import type { Action, GameSettings, GameState, PlayerCount } from "./types.js";
+import type { GameSettings, PlayerCount } from "@avalon/shared";
+import type { Action, GameState } from "./types.js";
 
 const RNG = seededRng([0]);
 

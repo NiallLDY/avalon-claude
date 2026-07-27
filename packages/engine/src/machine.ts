@@ -16,7 +16,11 @@ import {
   ROLES,
   TEAM_SIZE,
   failsRequired,
+  type ErrorCode,
+  type GameEvent,
+  type GameSettings,
   type MissionCardRule,
+  type Outcome,
   type PlayerCount,
   type RoleId,
   type Side,
@@ -24,15 +28,7 @@ import {
 import type { Rng } from "./rng.js";
 import { dealRoles, initialSides } from "./setup.js";
 import { computeVision } from "./vision.js";
-import type {
-  Action,
-  ErrorCode,
-  GameEvent,
-  GameSettings,
-  GameState,
-  Outcome,
-  ReduceResult,
-} from "./types.js";
+import type { Action, GameState, ReduceResult } from "./types.js";
 
 // ──────────────────────────── 小工具 ────────────────────────────
 

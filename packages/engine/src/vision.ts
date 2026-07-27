@@ -10,29 +10,8 @@
  * 视野在发牌时**一次性算好并冻结**，兰斯洛特换阵营不会更新任何人的视野。
  */
 
-import { ROLES, type RoleId } from "@avalon/shared";
+import { ROLES, type RoleId, type Vision } from "@avalon/shared";
 import { shuffle, type Rng } from "./rng.js";
-
-export interface Vision {
-  /**
-   * 我能看到的「红方」座位。
-   * - 梅林：除莫德雷德外的全部红方
-   * - 有视野的红方：除奥伯伦和自己外的全部红方
-   * - 其他人：空
-   * 只表示「是红方」，不含具体角色（Q4 默认方案）。
-   */
-  readonly evilSeats: readonly number[];
-  /**
-   * 派西维尔看到的两个座位（梅林与莫甘娜），**已随机打乱**，不标注谁是谁。
-   * 其他角色为空。
-   */
-  readonly merlinCandidates: readonly number[];
-  /**
-   * `evilSeats` 中需要额外标注「兰斯洛特」的座位。
-   * 只有红方队友视角才会有值；梅林看红兰斯洛特时这里是空的。
-   */
-  readonly lancelotSeats: readonly number[];
-}
 
 const EMPTY_VISION: Vision = {
   evilSeats: [],
