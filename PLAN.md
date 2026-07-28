@@ -76,6 +76,7 @@ avalon/
 ├─ .env.example
 ├─ scripts/
 │  ├─ deploy.sh              # 服务器：git pull + build + restart
+│  ├─ migrate.sh             # 换服务器：导出/导入 Redis 状态（见 §10.5）
 │  ├─ dev.sh / test.sh / sh.sh
 │  └─ art/                   # 素材流水线（见 §9.2）
 │     ├─ styles/<styleId>.json
@@ -200,6 +201,7 @@ function projectFor(game: Game, viewer: PlayerId | null): ClientGameView
 2. 昵称 + 头像在**首页设置**，也存 `localStorage`，随时可改。
 3. 入房时携带 `{playerId, token}`；服务端以此认座位、认房主、认重连。
 4. **换手机 = 新身份**（按你的要求，重新设昵称头像即可）。若原座位仍被占，房主可踢掉幽灵玩家后入座。
+   同理 **换域名 = 全员新身份** —— `localStorage` 按 origin 隔离，跟服务器搬不搬家无关（见 §10.5）。
 5. 断线保护：对局中掉线不释放座位，重连即恢复；房主可"强制推进"避免卡死。
 
 ---
@@ -388,6 +390,28 @@ cd /path/to/avalon && ./scripts/deploy.sh
 # deploy.sh 内容：git pull --ff-only → docker compose build → docker compose up -d → docker image prune -f
 ```
 **无数据库迁移**；Redis 数据结构变更时脚本会带版本号自动清理不兼容的房间快照（对局是短生命周期数据，清掉无损失）。
+
+### 10.5 换服务器
+
+`./scripts/migrate.sh export|import`，操作步骤见 [`README.md`](./README.md)。这里只记为什么这么做。
+
+**服务端状态只有 Redis 里那几个键**（房间快照 `avalon:v2:room:*` + 索引 `avalon:v2:rooms` + 战报
+`avalon:v2:report:*`）。没有数据库、没有上传文件，限流计数是纯内存的（§7），角色插画在仓库里。
+所以「迁移」= 搬 Redis + `.env` + 对齐代码版本。
+
+三条硬约束：
+
+1. **域名不能变。** 玩家身份 `playerId + token` 在手机 `localStorage` 里，按 origin 隔离（§6）。
+   换域名 = 所有人变成新玩家，座位与房主身份全丢。这是唯一真会丢用户的操作，
+   跟换不换服务器无关；真要换域名，等一局都没有的时候再换。
+2. **先停 app 再导 Redis。** 房间的真相在内存，写 Redis 有 2 秒防抖（`snapshotDebounceMs`）；
+   `SIGTERM` 会把所有房间立刻落盘。顺序反了，丢的正好是最后几秒 —— 最可能有人在操作的几秒。
+3. **快照结构与代码版本绑定。** 导出时记 commit，导入时版本对不上要显式 `--force`。
+
+`/data` 目录整个搬（RDB + AOF 一起），避免「Redis 启动时优先读哪个」的歧义；TTL 存的是绝对时间，
+搬过去照常倒计时。玩家侧全程只会看到一次「连接断开，正在重连」，重连后自动回到原房间（§6.5）。
+
+用 Cloudflare Tunnel 时切入口不用等 DNS：同一个 token 在新机跑起来、旧机停掉即可。
 
 ---
 
