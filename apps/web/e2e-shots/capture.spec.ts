@@ -21,10 +21,10 @@ const shot = async (page: Page, name: string) => {
 
 const openApp = async (page: Page, nick: string) => {
   await page.goto("/");
-  await expect(page.getByText("MELBOURNE 阿瓦隆")).toBeVisible();
-  const input = page.getByPlaceholder("你的昵称");
-  await input.fill(nick);
-  await input.blur();
+  // 首次进站先设身份
+  await page.getByPlaceholder("你的昵称").fill(nick);
+  await page.getByRole("button", { name: "进去玩" }).click();
+  await expect(page.getByRole("button", { name: "开房间" })).toBeVisible();
 };
 
 test("拍完整一局", async ({ browser }) => {
@@ -46,6 +46,13 @@ test("拍完整一局", async ({ browser }) => {
 
   // ── 大厅 ──
   await shot(host, "大厅");
+
+  // 规则页
+  await host.getByRole("button", { name: /看规则/ }).click();
+  await shot(host, "规则-流程");
+  await host.getByRole("button", { name: "角色图鉴" }).click();
+  await shot(host, "规则-角色图鉴");
+  await host.getByRole("button", { name: "← 返回" }).click();
 
   await host.getByRole("button", { name: "开房间" }).click();
   await host.getByPlaceholder(/的房间$/).fill("周五局");

@@ -123,6 +123,13 @@ export const Room = () => {
         </div>
         <button
           type="button"
+          onClick={() => useStore.getState().setRulesOpen(true)}
+          className="rounded-lg px-2 py-1 text-sm text-ink-mute active:bg-surface"
+        >
+          规则
+        </button>
+        <button
+          type="button"
           onClick={() => setSheet("settings")}
           className="rounded-lg px-2 py-1 text-sm text-ink-mute active:bg-surface"
         >

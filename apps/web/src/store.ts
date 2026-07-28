@@ -15,6 +15,7 @@ import type {
 } from "@avalon/shared";
 import {
   clearLastRoom,
+  hasProfile,
   loadIdentity,
   loadLastRoom,
   loadProfile,
@@ -66,6 +67,10 @@ interface AppState {
   state: StatePayload | null;
   /** 正在自动回房（刷新后恢复），此时不该把用户甩回大厅 */
   restoring: boolean;
+  /** 还没设过昵称头像，先挡一道首次设置 */
+  needsOnboarding: boolean;
+  /** 规则页开着没。任何页面都能开，所以放全局 */
+  rulesOpen: boolean;
   lastEvent: GameEvent | null;
   /** 当前盖在屏幕上的结果卡，玩家点掉为止 */
   result: ResultCard | null;
@@ -73,6 +78,8 @@ interface AppState {
 
   connect: () => void;
   setProfile: (profile: Profile) => void;
+  completeOnboarding: () => void;
+  setRulesOpen: (open: boolean) => void;
   createRoom: (opts: {
     name: string;
     visibility: "PUBLIC" | "PRIVATE";
@@ -127,6 +134,8 @@ export const useStore = create<AppState>((set, get) => ({
   rooms: [],
   state: null,
   restoring: loadLastRoom() !== null,
+  needsOnboarding: !hasProfile(),
+  rulesOpen: false,
   lastEvent: null,
   result: null,
   toasts: [],
@@ -233,6 +242,9 @@ export const useStore = create<AppState>((set, get) => ({
     // 之后改的昵称如果不同步，进房时服务端用的还是握手时那个旧名字。
     get().socket?.emit("room:profile", profile);
   },
+
+  completeOnboarding: () => set({ needsOnboarding: false }),
+  setRulesOpen: (rulesOpen) => set({ rulesOpen }),
 
   createRoom: async (opts) => {
     const res = await fetch("/api/rooms", {

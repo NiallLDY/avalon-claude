@@ -85,7 +85,14 @@ export const Lobby = () => {
         <h1 className="text-center font-display text-xl tracking-[0.2em] text-gold">
           MELBOURNE 阿瓦隆
         </h1>
-        <p className="text-center text-xs text-ink-mute">线下面对面玩阿瓦隆用的发牌器</p>
+        <button
+          type="button"
+          onClick={() => useStore.getState().setRulesOpen(true)}
+          className="mx-auto block text-center text-xs text-ink-mute underline decoration-dotted
+            underline-offset-4 active:text-gold"
+        >
+          线下面对面玩阿瓦隆用的发牌器 · 看规则
+        </button>
       </header>
 
       {/* 身份卡 —— 无账号，改完即生效 */}

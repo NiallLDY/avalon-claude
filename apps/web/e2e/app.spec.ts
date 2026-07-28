@@ -10,9 +10,16 @@ test.beforeEach(async ({ context }) => {
   await context.clearCookies();
 });
 
-const openApp = async (page: Page) => {
+/** 打开应用。新的浏览器上下文没有身份，会先被首次设置挡住 */
+const openApp = async (page: Page, nick = "玩家") => {
   await page.goto("/");
-  await expect(page.getByText("MELBOURNE 阿瓦隆")).toBeVisible();
+  const enter = page.getByRole("button", { name: "进去玩" });
+  if (await enter.isVisible().catch(() => false)) {
+    await page.getByPlaceholder("你的昵称").fill(nick);
+    await enter.click();
+  }
+  // 断言要用大厅独有的东西 —— 首次设置页也有「MELBOURNE 阿瓦隆」这行标题
+  await expect(page.getByRole("button", { name: "开房间" })).toBeVisible();
 };
 
 /** 坐到第 n 个位子（0 起） */
@@ -84,17 +91,17 @@ test.describe("房间", () => {
 
     // 刷新后仍在房间：房间码还在，没退回大厅标题
     await expect(page.locator("p.font-display").first()).toHaveText(code);
-    await expect(page.getByText("MELBOURNE 阿瓦隆")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "开房间" })).toHaveCount(0);
   });
 
   test("主动退出后刷新应该回大厅，不能又被拉回去", async ({ page }) => {
     await openApp(page);
     await createRoom(page);
     await page.getByRole("button", { name: "← 退出" }).click();
-    await expect(page.getByText("MELBOURNE 阿瓦隆")).toBeVisible();
+    await expect(page.getByRole("button", { name: "开房间" })).toBeVisible();
 
     await page.reload();
-    await expect(page.getByText("MELBOURNE 阿瓦隆")).toBeVisible();
+    await expect(page.getByRole("button", { name: "开房间" })).toBeVisible();
   });
 
   test("进房先在等待区，自己挑位子坐", async ({ page }) => {
@@ -206,15 +213,11 @@ test.describe("座位号", () => {
     const pa = await a.newPage();
     const pb = await b.newPage();
 
-    await openApp(pa);
-    await pa.getByPlaceholder("你的昵称").fill("阿隆");
-    await pa.getByPlaceholder("你的昵称").blur();
+    await openApp(pa, "阿隆");
     const code = await createRoom(pa, "号码测试");
     await sit(pa, 0);
 
-    await openApp(pb);
-    await pb.getByPlaceholder("你的昵称").fill("小梅");
-    await pb.getByPlaceholder("你的昵称").blur();
+    await openApp(pb, "小梅");
     await pb.getByPlaceholder("房间码").fill(code);
     await pb.getByRole("button", { name: "进" }).click();
     await sit(pb, 1);
@@ -235,7 +238,7 @@ test.describe("退出房间", () => {
     await openApp(page);
     await createRoom(page);
     await page.getByRole("button", { name: "← 退出" }).click();
-    await expect(page.getByText("MELBOURNE 阿瓦隆")).toBeVisible();
+    await expect(page.getByRole("button", { name: "开房间" })).toBeVisible();
   });
 
   test("对局中点退出也要回到大厅", async ({ browser }) => {
@@ -267,11 +270,51 @@ test.describe("退出房间", () => {
     await quitter.getByRole("button", { name: "离开" }).click();
 
     // 之前这里什么都不会发生：客户端本地状态没清，一直停在对局页
-    await expect(quitter.getByText("MELBOURNE 阿瓦隆")).toBeVisible();
+    await expect(quitter.getByRole("button", { name: "开房间" })).toBeVisible();
     // 而且刷新之后不该又被自动拉回房间
     await quitter.reload();
-    await expect(quitter.getByText("MELBOURNE 阿瓦隆")).toBeVisible();
+    await expect(quitter.getByRole("button", { name: "开房间" })).toBeVisible();
 
     for (const c of ctxs) await c.close();
+  });
+});
+
+test.describe("首次进站", () => {
+  test("没设过身份先挡一道，设完才进大厅", async ({ browser }) => {
+    const ctx = await browser.newContext({ locale: "zh-CN" });
+    const page = await ctx.newPage();
+    await page.goto("/");
+
+    await expect(page.getByText("先给自己起个名字，桌上好认人")).toBeVisible();
+    await expect(page.getByRole("button", { name: "开房间" })).toHaveCount(0);
+    // 名字不填不让进
+    await expect(page.getByRole("button", { name: "进去玩" })).toBeDisabled();
+
+    await page.getByPlaceholder("你的昵称").fill("阿隆");
+    await page.getByRole("button", { name: "进去玩" }).click();
+    await expect(page.getByRole("button", { name: "开房间" })).toBeVisible();
+
+    // 设过之后刷新不再问
+    await page.reload();
+    await expect(page.getByRole("button", { name: "开房间" })).toBeVisible();
+    await expect(page.getByPlaceholder("你的昵称")).toHaveValue("阿隆");
+    await ctx.close();
+  });
+});
+
+test.describe("规则", () => {
+  test("大厅能打开规则，含流程表和角色图鉴", async ({ page }) => {
+    await openApp(page);
+    await page.getByRole("button", { name: /看规则/ }).click();
+
+    await expect(page.getByText("每轮上几个人")).toBeVisible();
+    await expect(page.getByText(/保护轮/).first()).toBeVisible();
+
+    await page.getByRole("button", { name: "角色图鉴" }).click();
+    await expect(page.getByText("莫德雷德", { exact: true })).toBeVisible();
+    await expect(page.getByText(/梅林看不见你/)).toBeVisible();
+
+    await page.getByRole("button", { name: "← 返回" }).click();
+    await expect(page.getByRole("button", { name: "开房间" })).toBeVisible();
   });
 });

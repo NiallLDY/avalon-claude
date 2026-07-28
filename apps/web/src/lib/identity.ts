@@ -43,6 +43,18 @@ export const loadIdentity = (): { playerId: string; token: string } => {
   return { playerId, token };
 };
 
+/** 之前设过身份没有。没设过就要走一次首次设置，不能拿随机默认名混进桌 */
+export const hasProfile = (): boolean => {
+  const raw = localStorage.getItem(KEY_PROFILE);
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw) as Profile;
+    return Boolean(parsed?.nick && parsed?.avatar?.seed);
+  } catch {
+    return false;
+  }
+};
+
 export const loadProfile = (): Profile => {
   const raw = localStorage.getItem(KEY_PROFILE);
   if (raw) {
@@ -50,9 +62,10 @@ export const loadProfile = (): Profile => {
       const parsed = JSON.parse(raw) as Profile;
       if (parsed?.nick && parsed?.avatar?.seed) return parsed;
     } catch {
-      // 存坏了就当没有，重新生成
+      // 存坏了就当没设过
     }
   }
+  // 只是个占位，首次设置界面会盖在上面
   return {
     nick: DEFAULT_NICKS[Math.floor(Math.random() * DEFAULT_NICKS.length)]!,
     avatar: randomAvatar(),

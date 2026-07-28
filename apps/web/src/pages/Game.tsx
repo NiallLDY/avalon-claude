@@ -73,6 +73,12 @@ const Progress = ({ game }: { game: ClientGameView }) => {
   );
 };
 
+/** 从队长开始，按方向绕一圈的座位顺序。线下最常吵的就是「谁先说」 */
+const speakOrder = (leaderSeat: number, total: number, dir: "CW" | "CCW"): number[] =>
+  Array.from({ length: total }, (_, i) =>
+    dir === "CW" ? (leaderSeat + i) % total : (leaderSeat - i + total * total) % total,
+  );
+
 const PHASE_HINT: Record<string, string> = {
   ROLE_REVEAL: "查看身份，确认后开始",
   LOYALTY_FLIP: "翻开忠诚牌",
@@ -187,13 +193,28 @@ export const Game = () => {
       */}
       <div className="shrink-0 px-4 py-1 text-center">
         {game.team && game.team.length > 0 ? (
-          <div className="mb-1 rounded-xl bg-surface px-3 py-2">
-            <p className="mb-1.5 text-[0.7rem] text-ink-mute">
+          <div className="mb-1 space-y-1.5 rounded-xl bg-surface px-3 py-2">
+            <p className="text-[0.7rem] text-ink-mute">
               {phase === "MISSION" ? "正在执行任务的是" : "这一车"}
             </p>
             <div className="flex justify-center">
               <PlayerChips seated={room.seats} seats={game.team} tone="gold" />
             </div>
+
+            {/*
+              发言顺序。队长选了方向，**全场都要看得到** ——
+              只有队长自己知道的话，这个功能等于不存在。
+            */}
+            {game.speakDirection && phase !== "MISSION" ? (
+              <p className="border-t border-line pt-1.5 text-[0.7rem] text-ink-mute">
+                发言 {game.speakDirection === "CW" ? "顺时针 ↻" : "逆时针 ↺"} ·{" "}
+                <span className="text-ink-soft tabular-nums">
+                  {speakOrder(game.leaderSeat, room.seats.length, game.speakDirection)
+                    .map((n) => `${n + 1}`)
+                    .join(" → ")}
+                </span>
+              </p>
+            ) : null}
           </div>
         ) : null}
         <p className="text-sm text-ink-soft">
@@ -219,6 +240,13 @@ export const Game = () => {
           </Button>
           <Button tone="ghost" className="flex-1 text-xs" onClick={() => setSheet("report")}>
             战报
+          </Button>
+          <Button
+            tone="ghost"
+            className="flex-1 text-xs"
+            onClick={() => useStore.getState().setRulesOpen(true)}
+          >
+            规则
           </Button>
           <Button tone="ghost" className="flex-1 text-xs" onClick={() => setConfirmLeave(true)}>
             退出
