@@ -16,11 +16,21 @@ import { PlayerChip, PlayerChips } from "./PlayerChip.js";
 export const RoleCard = ({
   game,
   seated,
+  onReveal,
 }: {
   game: ClientGameView;
   seated: readonly (PublicPlayer | null)[];
+  /** 翻开时回调。发牌阶段用它顶掉「我已看牌」那一步 —— 看了就是确认了 */
+  onReveal?: () => void;
 }) => {
   const [revealed, setRevealed] = useState(false);
+
+  const flip = (): void => {
+    setRevealed((v) => {
+      if (!v) onReveal?.();
+      return !v;
+    });
+  };
 
   // 切到后台/锁屏时自动盖回
   useEffect(() => {
@@ -47,7 +57,7 @@ export const RoleCard = ({
       {/* 横向卡：插画收成缩略图，把纵向空间留给视野 */}
       <button
         type="button"
-        onClick={() => setRevealed((v) => !v)}
+        onClick={flip}
         className="flex select-none items-stretch gap-3 rounded-2xl border border-line
           bg-surface-2 p-2.5 text-left active:opacity-90"
       >

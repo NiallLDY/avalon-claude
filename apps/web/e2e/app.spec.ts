@@ -303,7 +303,10 @@ test.describe("退出房间", () => {
     await host.getByRole("button", { name: "开始游戏" }).click();
 
     const quitter = pages[4]!;
-    await expect(quitter.getByRole("button", { name: "我已看牌" })).toBeVisible();
+    // 身份卡开局自动弹出，先关掉才看得到底下的界面
+    await expect(quitter.getByText("点击查看身份")).toBeVisible();
+    await quitter.keyboard.press("Escape");
+    await expect(quitter.getByRole("button", { name: "查看身份" })).toBeVisible();
 
     // 对局中也要能看到房间名和房间码。以前只藏在「离开这局？」的弹窗里 ——
     // 等你想退出时才看得到房间码，那时候已经晚了
@@ -345,7 +348,14 @@ test.describe("终局", () => {
     }
     for (const p of pages) await p.getByRole("button", { name: "准备" }).click();
     await host.getByRole("button", { name: "开始游戏" }).click();
-    for (const p of pages) await p.getByRole("button", { name: "我已看牌" }).click();
+    // 身份卡开局自动弹出，翻开就算确认看牌。
+    // **必须等它真的关掉**：卡片是模态，打开时背景整块 aria-hidden，
+    // getByRole 看不到底下的按钮，后面找队长会一个都找不到
+    for (const p of pages) {
+      await p.getByRole("dialog").getByRole("button", { name: /点击查看身份/ }).click();
+      await p.keyboard.press("Escape");
+      await expect(p.getByRole("dialog")).toHaveCount(0);
+    }
 
     // 打到终局最快的路子是连续 5 次流局 —— 红方直接赢，不用打完三车任务
     for (let round = 0; round < 5; round++) {

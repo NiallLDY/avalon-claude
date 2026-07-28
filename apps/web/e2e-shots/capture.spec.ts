@@ -85,19 +85,23 @@ test("拍完整一局", async ({ browser }) => {
   await expect(host.getByText(/^\d+\/5 已看牌$/)).toBeVisible();
   await shot(host, "发牌");
 
-  // 身份卡：点一下翻开
-  await host.getByRole("button", { name: "身份卡" }).click();
+  // 身份卡开局自动弹出，不用去底部找按钮
   await expect(host.getByText("点击查看身份")).toBeVisible();
   await shot(host, "身份卡-盖住");
 
-  await host.getByRole("dialog").getByRole("button", { name: /点击查看身份/ }).click();
-  await expect(host.getByText("点一下盖回")).toBeVisible();
-  await shot(host, "身份卡-显形");
-  await host.keyboard.press("Escape");
-  await host.waitForTimeout(400);
-
+  // 翻开就等于确认看牌，没有单独的「我已看牌」
   for (const page of pages) {
-    await page.getByRole("button", { name: "我已看牌" }).click();
+    await expect(page.getByText("点击查看身份")).toBeVisible();
+    await page.getByRole("dialog").getByRole("button", { name: /点击查看身份/ }).click();
+    await expect(page.getByText("点一下盖回")).toBeVisible();
+  }
+  await shot(host, "身份卡-显形");
+
+  // 每个人都得关掉。卡片是模态，开着的时候背景整块 aria-hidden，
+  // getByRole 找不到底下的按钮 —— 后面找队长会一个都找不到
+  for (const page of pages) {
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
   }
 
   /** 所有人的结果弹窗都点掉，然后房主点「立即继续」跳过自动推进的等待 */

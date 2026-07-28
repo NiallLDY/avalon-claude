@@ -150,7 +150,7 @@ const speakOrder = (leaderSeat: number, total: number, dir: "CW" | "CCW"): numbe
   );
 
 const PHASE_HINT: Record<string, string> = {
-  ROLE_REVEAL: "查看身份，确认后开始",
+  ROLE_REVEAL: "翻开身份卡就算确认",
   LOYALTY_FLIP: "翻开忠诚牌",
   TEAM_BUILD: "队长选择队员",
   VOTE: "全体投票",
@@ -172,6 +172,17 @@ export const Game = () => {
 
   // 换阶段就清掉选择，避免上一阶段的选中态漏到下一阶段
   useEffect(() => setPicked([]), [phase, game?.attempt, game?.roundIndex]);
+
+  /*
+   * 开局直接把身份卡怼到脸上，不用先去底部找「身份卡」按钮。
+   * 只在还没看牌时弹一次：依赖里带上 needsRole，玩家自己关掉之后
+   * 依赖没变，不会再弹回来跟他打架。
+   */
+  const needsRole =
+    phase === "ROLE_REVEAL" && game?.me != null && !game.ackedSeats.includes(game.me.seat);
+  useEffect(() => {
+    if (needsRole) setSheet("role");
+  }, [needsRole]);
 
   if (!state || !game) return null;
   const { room } = state;
@@ -303,6 +314,7 @@ export const Game = () => {
           picked={picked}
           isHost={isHost}
           onAct={act}
+          onOpenRole={() => setSheet("role")}
           seatCount={room.seatCount}
           who={labeler(room.seats)}
         />
@@ -328,7 +340,14 @@ export const Game = () => {
       </div>
 
       <Sheet open={sheet === "role"} onOpenChange={(o) => setSheet(o ? "role" : null)} title="我的身份">
-        <RoleCard game={game} seated={room.seats} />
+        {/* 发牌阶段翻开就等于确认看牌；其他阶段只是随时翻出来看看，不发动作 */}
+        <RoleCard
+          game={game}
+          seated={room.seats}
+          onReveal={() => {
+            if (needsRole) act({ type: "ACK_ROLE" });
+          }}
+        />
       </Sheet>
       <Sheet open={sheet === "report"} onOpenChange={(o) => setSheet(o ? "report" : null)} title="战报">
         <Report game={game} seated={room.seats} />
@@ -363,6 +382,7 @@ const Actions = ({
   picked,
   isHost,
   onAct,
+  onOpenRole,
   seatCount,
   who,
 }: {
@@ -370,6 +390,7 @@ const Actions = ({
   picked: readonly number[];
   isHost: boolean;
   onAct: ReturnType<typeof useStore.getState>["act"];
+  onOpenRole: () => void;
   seatCount: number;
   who: ReturnType<typeof labeler>;
 }) => {
@@ -387,9 +408,14 @@ const Actions = ({
     case "ROLE_REVEAL":
       return (
         <div className="space-y-2">
+          {/*
+            没有单独的「我已看牌」了 —— 翻开身份卡本身就是确认。
+            以前那个按钮可以不看牌直接点掉，等于确认了个寂寞；
+            现在只有真翻开过才算数。这个按钮是给关掉了卡片的人回去用的。
+          */}
           {me && !game.ackedSeats.includes(me.seat) ? (
-            <Button className="w-full" onClick={() => onAct({ type: "ACK_ROLE" })}>
-              我已看牌
+            <Button className="w-full" onClick={onOpenRole}>
+              查看身份
             </Button>
           ) : (
             <p className="py-3 text-center text-sm text-ink-mute">等其他人看牌</p>
