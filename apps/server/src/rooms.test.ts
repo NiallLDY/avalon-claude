@@ -14,7 +14,10 @@ import {
   leaveRoom,
   markDisconnected,
   maybeTransferHost,
-  reorderSeats,
+  setReady,
+  setSeatCount,
+  occupants,
+  emptySeats,
   roomView,
   seatOf,
   setSettings,
@@ -41,46 +44,137 @@ const room = (): Room =>
     existingIds: new Set(),
   });
 
-/** 拉 n 个人进房并全部落座 */
-const seated = (n: number): Room => {
+/** 拉 n 个人进房、坐满 n 个位子。`ready` 决定是否顺便全部准备 */
+const seated = (n: number, ready = true): Room => {
   const r = room();
+  setSeatCount(r, "p0", n, T0);
   for (let i = 0; i < n; i++) {
     joinRoom(r, { id: `p${i}`, token: `t${i}`, nick: `玩家${i}`, avatar: AVATAR }, T0);
-    sit(r, `p${i}`, T0);
+    sit(r, `p${i}`, i, T0);
   }
+  if (ready) for (let i = 0; i < n; i++) setReady(r, `p${i}`, true, T0);
   return r;
 };
 
 describe("入座与离座", () => {
-  it("入座按顺序排进环形座次，索引即引擎座位号", () => {
-    const r = seated(3);
-    expect(r.seats).toEqual(["p0", "p1", "p2"]);
-    expect(seatOf(r, "p1")).toBe(1);
+  it("坐到哪个位子由自己挑，不是按点击先后分配", () => {
+    const r = room();
+    setSeatCount(r, "p0", 5, T0);
+    for (const id of ["a", "b"]) {
+      joinRoom(r, { id, token: "t", nick: id, avatar: AVATAR }, T0);
+    }
+    expect(sit(r, "a", 3, T0).ok).toBe(true);
+    expect(sit(r, "b", 0, T0).ok).toBe(true);
+    expect(seatOf(r, "a")).toBe(3);
+    expect(seatOf(r, "b")).toBe(0);
+    expect(emptySeats(r)).toEqual([1, 2, 4]);
   });
 
-  it("不能重复入座", () => {
-    const r = seated(1);
-    expect(sit(r, "p0", T0)).toMatchObject({ ok: false, error: "ALREADY_SEATED" });
+  it("有人的位子坐不进去", () => {
+    const r = seated(5);
+    joinRoom(r, { id: "late", token: "t", nick: "迟到", avatar: AVATAR }, T0);
+    expect(sit(r, "late", 2, T0).ok).toBe(false);
   });
 
-  it("满 10 人后不能再入座", () => {
-    const r = seated(10);
-    joinRoom(r, { id: "p10", token: "t", nick: "迟到", avatar: AVATAR }, T0);
-    expect(sit(r, "p10", T0)).toMatchObject({ ok: false, error: "ROOM_FULL" });
+  it("越界的位子坐不进去", () => {
+    const r = seated(5);
+    joinRoom(r, { id: "x", token: "t", nick: "x", avatar: AVATAR }, T0);
+    for (const bad of [-1, 5, 99, 1.5]) {
+      expect(sit(r, "x", bad, T0), String(bad)).toMatchObject({ ok: false });
+    }
   });
 
-  it("起立后座位号会整体前移", () => {
-    const r = seated(3);
-    stand(r, "p0", T0);
-    expect(r.seats).toEqual(["p1", "p2"]);
-    expect(seatOf(r, "p2")).toBe(1);
+  it("已入座的人点别的空位就是换位，不占两个", () => {
+    const r = room();
+    setSeatCount(r, "p0", 5, T0);
+    joinRoom(r, { id: "a", token: "t", nick: "a", avatar: AVATAR }, T0);
+    sit(r, "a", 1, T0);
+    expect(sit(r, "a", 4, T0).ok).toBe(true);
+    expect(occupants(r)).toEqual(["a"]);
+    expect(seatOf(r, "a")).toBe(4);
+  });
+
+  it("起立后位子变回空位，别人的座位号不受影响", () => {
+    const r = seated(5);
+    stand(r, "p2", T0);
+    expect(seatOf(r, "p2")).toBe(-1);
+    expect(seatOf(r, "p3")).toBe(3);
+    expect(emptySeats(r)).toEqual([2]);
   });
 
   it("对局中不能入座或起立", () => {
     const r = seated(5);
     startGame(r, "p0", T0);
-    expect(sit(r, "p0", T0)).toMatchObject({ ok: false, error: "ROOM_IN_GAME" });
+    expect(sit(r, "p0", 1, T0)).toMatchObject({ ok: false, error: "ROOM_IN_GAME" });
     expect(stand(r, "p1", T0)).toMatchObject({ ok: false, error: "ROOM_IN_GAME" });
+  });
+});
+
+describe("几人局", () => {
+  it("只有房主能改，且限定 5–10", () => {
+    const r = seated(5);
+    expect(setSeatCount(r, "p1", 7, T0)).toMatchObject({ ok: false, error: "NOT_HOST" });
+    for (const bad of [4, 11, 0]) {
+      expect(setSeatCount(r, "p0", bad, T0), String(bad)).toMatchObject({ ok: false });
+    }
+    expect(setSeatCount(r, "p0", 7, T0).ok).toBe(true);
+    expect(r.seatCount).toBe(7);
+    expect(r.seats).toHaveLength(7);
+  });
+
+  it("缩小时多出来的人回等待区，不是被踢出房间", () => {
+    const r = seated(7);
+    expect(setSeatCount(r, "p0", 5, T0).ok).toBe(true);
+    expect(occupants(r)).toEqual(["p0", "p1", "p2", "p3", "p4"]);
+    // 人还在房间里，只是没座位了
+    expect(r.players.has("p5")).toBe(true);
+    expect(seatOf(r, "p5")).toBe(-1);
+  });
+
+  it("改人数会清掉所有人的准备", () => {
+    const r = seated(5);
+    expect(startBlockedReason(r)).toBeNull();
+    setSeatCount(r, "p0", 6, T0);
+    expect(startBlockedReason(r)).toContain("空位");
+  });
+});
+
+describe("准备", () => {
+  it("全部准备之前开不了局", () => {
+    const r = seated(5, false);
+    expect(startBlockedReason(r)).toContain("没准备");
+    expect(startGame(r, "p0", T0).ok).toBe(false);
+
+    for (const id of ["p0", "p1", "p2", "p3", "p4"]) setReady(r, id, true, T0);
+    expect(startBlockedReason(r)).toBeNull();
+    expect(startGame(r, "p0", T0).ok).toBe(true);
+  });
+
+  it("没入座的人不用也不能准备", () => {
+    const r = seated(5);
+    joinRoom(r, { id: "wait", token: "t", nick: "等着", avatar: AVATAR }, T0);
+    expect(setReady(r, "wait", true, T0)).toMatchObject({ ok: false, error: "NOT_SEATED" });
+    expect(startBlockedReason(r)).toBeNull();
+  });
+
+  it("改规则会清掉准备 —— 别让人在不知情的情况下被开进新规则的局", () => {
+    const r = seated(7);
+    expect(startBlockedReason(r)).toBeNull();
+    setSettings(r, "p0", { ...DEFAULT_SETTINGS, mode: "LANCELOT" }, T0);
+    expect(startBlockedReason(r)).toContain("没准备");
+  });
+
+  it("换座和起立也会清掉准备", () => {
+    const r = seated(5);
+    stand(r, "p4", T0);
+    sit(r, "p4", 4, T0);
+    expect(startBlockedReason(r)).toContain("没准备");
+  });
+
+  it("掉线会清掉准备", () => {
+    const r = seated(5);
+    markDisconnected(r, "p3", T0);
+    expect(r.players.get("p3")!.ready).toBe(false);
   });
 });
 
@@ -89,7 +183,7 @@ describe("掉线与重连", () => {
     const r = seated(5);
     startGame(r, "p0", T0);
     markDisconnected(r, "p3", T0);
-    expect(r.seats).toContain("p3");
+    expect(occupants(r)).toContain("p3");
     expect(seatOf(r, "p3")).toBe(3);
     expect(r.players.get("p3")!.connected).toBe(false);
   });
@@ -115,7 +209,7 @@ describe("掉线与重连", () => {
     const r = seated(5);
     startGame(r, "p0", T0);
     leaveRoom(r, "p3", T0);
-    expect(r.seats).toEqual(["p0", "p1", "p2", "p3", "p4"]);
+    expect(occupants(r)).toEqual(["p0", "p1", "p2", "p3", "p4"]);
     expect(r.players.get("p3")!.connected).toBe(false);
   });
 });
@@ -165,26 +259,11 @@ describe("房主自动移交", () => {
   });
 });
 
-describe("座次调整", () => {
-  it("新顺序必须是当前落座者的一个排列", () => {
-    const r = seated(5);
-    expect(reorderSeats(r, ["p4", "p3", "p2", "p1", "p0"], T0).ok).toBe(true);
-    expect(r.seats).toEqual(["p4", "p3", "p2", "p1", "p0"]);
-  });
-
-  it("不能借调座位之名塞人、踢人或复制人", () => {
-    const r = seated(5);
-    expect(reorderSeats(r, ["p0", "p1", "p2", "p3"], T0).ok).toBe(false);
-    expect(reorderSeats(r, ["p0", "p1", "p2", "p3", "外人"], T0).ok).toBe(false);
-    expect(reorderSeats(r, ["p0", "p0", "p1", "p2", "p3"], T0).ok).toBe(false);
-    expect(r.seats).toEqual(["p0", "p1", "p2", "p3", "p4"]);
-  });
-});
-
 describe("开局条件", () => {
-  it("不足 5 人不能开", () => {
-    const r = seated(4);
-    expect(startBlockedReason(r)).toContain("还差 1 人");
+  it("有空位不能开", () => {
+    const r = seated(5);
+    stand(r, "p4", T0);
+    expect(startBlockedReason(r)).toContain("空位");
     expect(startGame(r, "p0", T0).ok).toBe(false);
   });
 
@@ -276,9 +355,10 @@ describe("下发视图", () => {
     const r = seated(5);
     joinRoom(r, { id: "spec", token: "t", nick: "围观", avatar: AVATAR }, T0);
     const view = roomView(r);
-    expect(view.seated.map((p) => p.seat)).toEqual([0, 1, 2, 3, 4]);
-    expect(view.spectators.map((p) => p.id)).toEqual(["spec"]);
-    expect(view.seated[0]!.isHost).toBe(true);
+    expect(view.seatCount).toBe(5);
+    expect(view.seats.map((p) => p?.seat)).toEqual([0, 1, 2, 3, 4]);
+    expect(view.standing.map((p) => p.id)).toEqual(["spec"]);
+    expect(view.seats[0]!.isHost).toBe(true);
     expect(view.canStart).toBe(true);
   });
 
@@ -312,6 +392,6 @@ describe("踢人与移交", () => {
     const r = seated(5);
     leaveRoom(r, "p0", T0);
     expect(r.hostId).toBe("p1");
-    expect(r.seats).toEqual(["p1", "p2", "p3", "p4"]);
+    expect(occupants(r)).toEqual(["p1", "p2", "p3", "p4"]);
   });
 });

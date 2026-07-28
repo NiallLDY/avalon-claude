@@ -16,7 +16,7 @@ export const playerLabel = (seat: number, nick?: string): string =>
   nick ? `${seatNo(seat)} ${nick}` : seatNo(seat);
 
 /** 给一份座位名单，返回一个「座位号 → 称呼」的函数 */
-export const labeler = (seated: readonly PublicPlayer[]) => ({
+export const labeler = (seated: readonly (PublicPlayer | null)[]) => ({
   /** 「3号 老王」，用于正文 */
   full: (seat: number): string => playerLabel(seat, seated[seat]?.nick),
   /** 「3号」，用于空间紧张的地方（比如 10 个人的投票明细） */

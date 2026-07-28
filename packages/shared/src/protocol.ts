@@ -82,6 +82,9 @@ export const CLIENT_EVENT_NAMES = [
   "room:profile",
   "room:sit",
   "room:stand",
+  "room:ready",
+  "room:seatCount",
+  "room:dissolve",
   "room:reorder",
   "room:shuffleSeats",
   "room:requestSwap",
@@ -104,10 +107,12 @@ export interface PublicPlayer {
   readonly id: string;
   readonly nick: string;
   readonly avatar: Avatar;
-  /** null = 观战 */
+  /** null = 还没入座（开局前在等待区，开局后就是观战） */
   readonly seat: number | null;
   readonly connected: boolean;
   readonly isHost: boolean;
+  /** 已准备。只有在座玩家有意义 */
+  readonly ready: boolean;
 }
 
 /** 一次待处理的换座请求。线下常常临时挪位置，得让玩家自己能换 */
@@ -125,9 +130,15 @@ export interface RoomView {
   readonly allowSpectators: boolean;
   readonly hostId: string;
   readonly settings: GameSettings;
-  /** 按座次顺序排列，索引即 seatIndex */
-  readonly seated: readonly PublicPlayer[];
-  readonly spectators: readonly PublicPlayer[];
+  /** 房主设定的座位数，也就是「几人局」 */
+  readonly seatCount: number;
+  /**
+   * 环形座位，索引即 seatIndex，长度恒为 seatCount。
+   * `null` 表示空位 —— 玩家点空位入座。开局后不会有 null。
+   */
+  readonly seats: readonly (PublicPlayer | null)[];
+  /** 没入座的人：开局前是等待区，开局后是观战席 */
+  readonly standing: readonly PublicPlayer[];
   readonly inGame: boolean;
   /** 当前配置下能否开局；不能开时 `startBlockedReason` 说明原因 */
   readonly canStart: boolean;

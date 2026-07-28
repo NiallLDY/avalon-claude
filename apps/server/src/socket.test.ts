@@ -146,7 +146,11 @@ const setupRoom = async (n: number): Promise<{ roomId: string; members: Client[]
     c.state = await state;
     members.push(c);
   }
-  await waitFor(members, (c) => (c.state?.room.seated.length ?? 0) === n, "全员入座");
+  // 进房不再自动入座，得自己挑位子
+  for (const [i, c] of members.entries()) c.socket.emit("room:sit", { seatIndex: i });
+  await waitFor(members, (c) => (c.state?.room.seats.filter(Boolean).length ?? 0) === n, "全员入座");
+  for (const c of members) c.socket.emit("room:ready", { ready: true });
+  await waitFor(members, (c) => c.state?.room.canStart === true, "全员准备");
   return { roomId, members };
 };
 
@@ -182,11 +186,13 @@ describe("握手", () => {
     });
     if (!created.ok) throw new Error(created.error);
 
-    const state = await new Promise<StatePayload>((resolve) => {
+    await new Promise<StatePayload>((resolve) => {
       socket.once("state", resolve);
       socket.emit("room:join", { roomId: created.room.id });
     });
-    expect(state.room.seated[0]!.nick).toBe("梅林");
+    socket.emit("room:sit", { seatIndex: 0 });
+    const seatedState = await new Promise<StatePayload>((r) => socket.once("state", r));
+    expect(seatedState.room.seats[0]!.nick).toBe("梅林");
     socket.close();
   });
 });
@@ -195,7 +201,7 @@ describe("房间", () => {
   it("入座顺序就是环形座次，每人都能看到完整名单", async () => {
     const { members } = await setupRoom(5);
     for (const c of members) {
-      expect(c.state!.room.seated.map((p) => p.id)).toEqual(["p0", "p1", "p2", "p3", "p4"]);
+      expect(c.state!.room.seats.map((p) => p?.id)).toEqual(["p0", "p1", "p2", "p3", "p4"]);
     }
     expect(members[0]!.state!.room.hostId).toBe("p0");
     expect(members[0]!.state!.room.canStart).toBe(true);

@@ -27,7 +27,9 @@ import {
   kick,
   leaveRoom,
   markDisconnected,
-  reorderSeats,
+  canDissolve,
+  setReady,
+  setSeatCount,
   requestSwap,
   respondSwap,
   restartGame,
@@ -226,8 +228,8 @@ export const attachSocket = (io: IOServer, registry: Registry, store: Store): vo
       socket.leave("lobby");
       socket.join(`room:${room.id}`);
 
-      // 不是观战、房间没开局、还有空位就自动落座 —— 少点一次
-      if (!asSpectator && !room.game) sit(room, socket.data.playerId, now());
+      // **不自动入座。** 进来先在等待区，自己挑一个和线下真实位置对应的号。
+      void asSpectator;
       pushRoom(room);
       pushLobby();
     });
@@ -259,24 +261,51 @@ export const attachSocket = (io: IOServer, registry: Registry, store: Store): vo
       pushRoom(room);
     });
 
-    on("room:sit", () => {
+    on("room:sit", ({ seatIndex }) => {
       const room = currentRoom(socket);
-      if (room) reply(socket, sit(room, socket.data.playerId, now()), room);
+      if (room) reply(socket, sit(room, socket.data.playerId, seatIndex, now()), room);
+    });
+
+    on("room:ready", ({ ready }) => {
+      const room = currentRoom(socket);
+      if (room) reply(socket, setReady(room, socket.data.playerId, ready, now()), room);
+    });
+
+    on("room:seatCount", ({ seatCount }) => {
+      const room = currentRoom(socket);
+      if (room) reply(socket, setSeatCount(room, socket.data.playerId, seatCount, now()), room);
+    });
+
+    on("room:dissolve", () => {
+      const room = currentRoom(socket);
+      if (!room) return;
+      const allowed = canDissolve(room, socket.data.playerId);
+      if (!allowed.ok) {
+        reply(socket, allowed);
+        return;
+      }
+      // 先把所有人请出去，再销毁 —— 反过来的话 currentRoom 已经查不到房间了
+      for (const s of io.sockets.sockets.values()) {
+        const d = (s as AppSocket).data;
+        if (d.roomId !== room.id) continue;
+        s.emit("kicked", { reason: "房主解散了这个房间" });
+        s.leave(`room:${room.id}`);
+        s.join("lobby");
+        d.roomId = null;
+      }
+      const timer = autoTimers.get(room.id);
+      if (timer) {
+        clearTimeout(timer);
+        autoTimers.delete(room.id);
+      }
+      registry.destroy(room.id);
+      void store.remove(room.id);
+      pushLobby();
     });
 
     on("room:stand", () => {
       const room = currentRoom(socket);
       if (room) reply(socket, stand(room, socket.data.playerId, now()), room);
-    });
-
-    on("room:reorder", ({ order }) => {
-      const room = currentRoom(socket);
-      if (!room) return;
-      if (!isHost(room, socket.data.playerId)) {
-        socket.emit("error", { code: "NOT_HOST", message: "只有房主能调整座次" });
-        return;
-      }
-      reply(socket, reorderSeats(room, order, now()), room);
     });
 
     on("room:shuffleSeats", () => {

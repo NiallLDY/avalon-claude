@@ -91,8 +91,16 @@ export const CLIENT_EVENTS = {
   "room:join": z.object({ roomId: roomIdSchema, asSpectator: z.boolean().optional() }),
   "room:leave": z.object({}),
   "room:profile": profileSchema,
-  "room:sit": z.object({}),
+  /** 坐到指定空位 */
+  "room:sit": z.object({ seatIndex: seatSchema }),
   "room:stand": z.object({}),
+  "room:ready": z.object({ ready: z.boolean() }),
+  /** 房主设定几人局 */
+  "room:seatCount": z.object({
+    seatCount: z.number().int().min(MIN_PLAYERS).max(MAX_PLAYERS),
+  }),
+  /** 房主解散房间 */
+  "room:dissolve": z.object({}),
   /** 房主调整环形座次，必须是当前落座者的一个排列 */
   "room:reorder": z.object({
     order: z.array(playerIdSchema).min(MIN_PLAYERS).max(MAX_PLAYERS),

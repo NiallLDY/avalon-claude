@@ -26,7 +26,7 @@ export const PlayerChip = ({
   showNick = true,
   size = 20,
 }: {
-  player: PublicPlayer | undefined;
+  player: PublicPlayer | null | undefined;
   seat: number;
   tone?: Tone;
   /** 右侧角标，比如投票的 ✓ / ✗ */
@@ -62,7 +62,7 @@ export const PlayerChips = ({
   showNick,
   size,
 }: {
-  seated: readonly PublicPlayer[];
+  seated: readonly (PublicPlayer | null)[];
   seats: readonly number[];
   tone?: Tone;
   markOf?: (seat: number) => string | undefined;

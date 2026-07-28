@@ -54,13 +54,17 @@ test("拍完整一局", async ({ browser }) => {
 
   const code = (await host.locator("p.font-display").first().textContent())!.trim();
 
-  for (const page of pages.slice(1)) {
+  await host.getByRole("button", { name: "坐这 1" }).click();
+  for (const [i, page] of pages.slice(1).entries()) {
     await page.getByPlaceholder("房间码").fill(code);
     await page.getByRole("button", { name: "进" }).click();
     await expect(page.locator("p.font-display").first()).toHaveText(code);
+    await page.getByRole("button", { name: `坐这 ${i + 2}` }).click();
   }
-  await expect(host.getByText("5 人")).toBeVisible();
   await shot(host, "房间等待");
+  for (const page of pages) await page.getByRole("button", { name: "准备" }).click();
+  await expect(host.getByRole("button", { name: "开始游戏" })).toBeEnabled();
+  await shot(host, "全员准备");
 
   await host.getByRole("button", { name: "设置" }).click();
   await shot(host, "房间设置");
@@ -77,8 +81,8 @@ test("拍完整一局", async ({ browser }) => {
   await expect(host.getByText("点击查看身份")).toBeVisible();
   await shot(host, "身份卡-盖住");
 
-  await host.getByRole("dialog").locator("button.aspect-square").first().click();
-  await expect(host.getByText("点击盖回")).toBeVisible();
+  await host.getByRole("dialog").getByRole("button", { name: /点击查看身份/ }).click();
+  await expect(host.getByText("点一下盖回")).toBeVisible();
   await shot(host, "身份卡-显形");
   await host.keyboard.press("Escape");
   await host.waitForTimeout(400);

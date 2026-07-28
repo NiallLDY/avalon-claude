@@ -15,7 +15,7 @@ import type { Room, RoomPlayer } from "./rooms.js";
 import { logger } from "./logger.js";
 
 /** 快照结构一变就 +1，旧数据自动作废。对局是短生命周期数据，清掉无损失 */
-const KEY_VERSION = "v1";
+const KEY_VERSION = "v2"; // 座位模型改成定长槽位，v1 快照不兼容
 const roomKey = (id: string) => `avalon:${KEY_VERSION}:room:${id}`;
 const reportKey = (id: string) => `avalon:${KEY_VERSION}:report:${id}`;
 const ROOM_INDEX = `avalon:${KEY_VERSION}:rooms`;
@@ -27,7 +27,8 @@ interface RoomSnapshot {
   readonly allowSpectators: boolean;
   readonly hostId: string;
   readonly players: readonly RoomPlayer[];
-  readonly seats: readonly string[];
+  readonly seatCount: number;
+  readonly seats: readonly (string | null)[];
   readonly settings: Room["settings"];
   readonly game: GameState | null;
   readonly createdAt: number;
@@ -42,7 +43,8 @@ const toSnapshot = (room: Room): RoomSnapshot => ({
   allowSpectators: room.allowSpectators,
   hostId: room.hostId,
   // 快照落盘时全员按掉线记 —— 进程都重启了，所有 socket 必然已经断开
-  players: [...room.players.values()].map((p) => ({ ...p, connected: false, disconnectedAt: room.updatedAt })),
+  players: [...room.players.values()].map((p) => ({ ...p, connected: false, ready: false, disconnectedAt: room.updatedAt })),
+  seatCount: room.seatCount,
   seats: [...room.seats],
   settings: room.settings,
   game: room.game,
@@ -59,6 +61,7 @@ const fromSnapshot = (snap: RoomSnapshot): Room => ({
   hostId: snap.hostId,
   hostOfflineSince: snap.updatedAt,
   players: new Map(snap.players.map((p) => [p.id, { ...p }])),
+  seatCount: snap.seatCount,
   seats: [...snap.seats],
   settings: snap.settings,
   game: snap.game,

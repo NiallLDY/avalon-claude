@@ -15,6 +15,11 @@ const openApp = async (page: Page) => {
   await expect(page.getByText("MELBOURNE 阿瓦隆")).toBeVisible();
 };
 
+/** 坐到第 n 个位子（0 起） */
+const sit = async (page: Page, seat: number) => {
+  await page.getByRole("button", { name: `坐这 ${seat + 1}` }).click();
+};
+
 const createRoom = async (page: Page, name = "测试房") => {
   await page.getByRole("button", { name: "开房间" }).click();
   await page.getByPlaceholder(/的房间$/).fill(name);
@@ -92,11 +97,32 @@ test.describe("房间", () => {
     await expect(page.getByText("MELBOURNE 阿瓦隆")).toBeVisible();
   });
 
-  test("座位上要显示座位号，线下靠它对人", async ({ page }) => {
+  test("进房先在等待区，自己挑位子坐", async ({ page }) => {
     await openApp(page);
     await createRoom(page);
-    // 建房者自动入座 1 号位
-    await expect(page.locator("text=/^1$/").first()).toBeVisible();
+    await expect(page.getByText("点一个空位坐下")).toBeVisible();
+
+    await sit(page, 2);
+    await expect(page.getByText("你的座位")).toBeVisible();
+    await expect(page.getByText("3号", { exact: true })).toBeVisible();
+  });
+
+  test("坐满并全部准备之前开不了局", async ({ page }) => {
+    await openApp(page);
+    await createRoom(page);
+    await sit(page, 0);
+    await expect(page.getByText(/还有 4 个空位没人坐/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "开始游戏" })).toBeDisabled();
+  });
+
+  test("房主能设几人局", async ({ page }) => {
+    await openApp(page);
+    await createRoom(page);
+    await page.getByRole("button", { name: "设置" }).click();
+    const sheet = page.getByRole("dialog");
+    await sheet.getByRole("button", { name: "7", exact: true }).click();
+    await expect(sheet.getByText(/蓝方 4/)).toBeVisible();
+    await expect(sheet.getByText(/红方 3/)).toBeVisible();
   });
 
   test("人数不足 7 人时湖中女神不可开启，并说明原因", async ({ page }) => {
@@ -114,10 +140,10 @@ test.describe("房间", () => {
     await createRoom(page);
     await page.getByRole("button", { name: "设置" }).click();
 
-    // 限定在设置面板内 —— 底部footer 也有一句「还差 N 人」，不限定会撞上
     const sheet = page.getByRole("dialog");
-    await expect(sheet.getByText("上桌几个人就是几人局")).toBeVisible();
-    await expect(sheet.getByText(/还差 4 人才能开局（5–10 人）/)).toBeVisible();
+    await expect(sheet.getByText("几人局")).toBeVisible();
+    await expect(sheet.getByText(/蓝方 3/)).toBeVisible();
+    await expect(sheet.getByText(/红方 2/)).toBeVisible();
   });
 });
 
@@ -132,17 +158,19 @@ test.describe("换座位", () => {
     const code = await createRoom(pa, "换座测试");
 
     // B 用房间码进来，自动坐到 2 号位
+    await sit(pa, 0);
     await openApp(pb);
     await pb.getByPlaceholder("房间码").fill(code);
     await pb.getByRole("button", { name: "进" }).click();
     await expect(pb.locator("p.font-display").first()).toHaveText(code);
-    await expect(pa.getByText("2 人")).toBeVisible();
+    await sit(pb, 1);
+    await expect(pa.getByText("2/5 就位").or(pa.getByText(/还有 3 个空位/))).toBeVisible();
 
     // A 发起换座
-    await pa.getByRole("button", { name: "换座位" }).click();
+    await pa.getByRole("button", { name: "换座" }).click();
     await expect(pa.getByText("点一个人跟他换座")).toBeVisible();
     // 点 B 所在的 2 号座位
-    await pa.locator("button").filter({ hasText: /^2/ }).first().click();
+    await pa.locator("button").filter({ hasText: /^2 玩家|^2/ }).first().click();
 
     // B 收到请求并同意
     await expect(pb.getByText(/想和你换座位/)).toBeVisible();
@@ -161,9 +189,9 @@ test.describe("我是几号", () => {
   test("房间里要一眼看出自己的座位号", async ({ page }) => {
     await openApp(page);
     await createRoom(page);
+    await sit(page, 0);
 
-    // 圆心直接写着自己的号
-    await expect(page.getByText("你的座位 · 共 1 人")).toBeVisible();
+    await expect(page.getByText("你的座位")).toBeVisible();
     await expect(page.getByText("1号", { exact: true })).toBeVisible();
     // 自己那格标「你」而不是昵称
     await expect(page.getByText("你", { exact: true })).toBeVisible();
@@ -182,17 +210,18 @@ test.describe("座位号", () => {
     await pa.getByPlaceholder("你的昵称").fill("阿隆");
     await pa.getByPlaceholder("你的昵称").blur();
     const code = await createRoom(pa, "号码测试");
+    await sit(pa, 0);
 
     await openApp(pb);
     await pb.getByPlaceholder("你的昵称").fill("小梅");
     await pb.getByPlaceholder("你的昵称").blur();
     await pb.getByPlaceholder("房间码").fill(code);
     await pb.getByRole("button", { name: "进" }).click();
-    await expect(pa.getByText("2 人")).toBeVisible();
+    await sit(pb, 1);
 
     // 换座请求里必须出现「1号 阿隆」而不是光秃秃的「阿隆」
-    await pa.getByRole("button", { name: "换座位" }).click();
-    await pa.locator("button.absolute:not([disabled])").first().click();
+    await pa.getByRole("button", { name: "换座" }).click();
+    await pa.locator("button.absolute").filter({ hasText: "小梅" }).first().click();
     await expect(pb.getByText(/1号 阿隆.*想和你换座位/)).toBeVisible();
 
     await a.close();
@@ -219,11 +248,14 @@ test.describe("退出房间", () => {
 
     const host = pages[0]!;
     const code = await createRoom(host, "退出测试");
-    for (const p of pages.slice(1)) {
+    await sit(host, 0);
+    for (const [i, p] of pages.slice(1).entries()) {
       await p.getByPlaceholder("房间码").fill(code);
       await p.getByRole("button", { name: "进" }).click();
       await expect(p.locator("p.font-display").first()).toHaveText(code);
+      await sit(p, i + 1);
     }
+    for (const p of pages) await p.getByRole("button", { name: "准备" }).click();
     await expect(host.getByRole("button", { name: "开始游戏" })).toBeEnabled();
     await host.getByRole("button", { name: "开始游戏" }).click();
 

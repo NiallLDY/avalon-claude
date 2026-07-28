@@ -13,14 +13,17 @@ import { ROLES, type ClientGameView, type PublicPlayer } from "@avalon/shared";
 import { Avatar } from "./Avatar.js";
 
 interface Props {
-  readonly seated: readonly PublicPlayer[];
+  /** 环形座位，null 是空位 */
+  readonly seats: readonly (PublicPlayer | null)[];
   readonly game: ClientGameView | null;
   /** 可点选的座位号；空数组表示当前不能选人 */
   readonly selectable?: readonly number[];
   readonly selected?: readonly number[];
   readonly onSelect?: (seat: number) => void;
-  /** 我的座位号；观战时为 null */
+  /** 我的座位号；没入座时为 null */
   readonly selfSeat?: number | null;
+  /** 空位是否可点（等待页选座用） */
+  readonly emptySelectable?: boolean;
   /** 圆环中心的内容 */
   readonly children?: React.ReactNode;
 }
@@ -44,15 +47,16 @@ const seatPosition = (
 };
 
 export const SeatRing = ({
-  seated,
+  seats,
   game,
   selectable = [],
   selected = [],
   onSelect,
   selfSeat = null,
+  emptySelectable = false,
   children,
 }: Props) => {
-  const total = Math.max(seated.length, 1);
+  const total = Math.max(seats.length, 1);
 
   return (
     <div className="flex min-h-0 w-full flex-1 items-center justify-center px-3 py-1">
@@ -67,10 +71,10 @@ export const SeatRing = ({
           <div className="text-center leading-snug">{children}</div>
         </div>
 
-        {seated.map((player, seat) => {
+        {seats.map((player, seat) => {
           const { x, y } = seatPosition(seat, total, selfSeat);
           const isSelf = seat === selfSeat;
-          const canSelect = selectable.includes(seat);
+          const canSelect = player === null ? emptySelectable : selectable.includes(seat);
           const isSelected = selected.includes(seat);
           const isLeader = game?.leaderSeat === seat;
           const onTeam = game?.team?.includes(seat) ?? false;
@@ -80,6 +84,37 @@ export const SeatRing = ({
           const revealed = game?.revealedVotes?.[seat];
           const isLady = game?.lady?.holderSeat === seat;
           const role = game?.reveal?.[seat];
+
+          if (player === null) {
+            // 空位。点一下就坐进去 —— 这是「挑一个和线下真实位置对应的号」的入口
+            return (
+              <button
+                key={`empty-${seat}`}
+                type="button"
+                disabled={!canSelect}
+                onClick={() => onSelect?.(seat)}
+                style={{ left: `${x}%`, top: `${y}%` }}
+                className={`absolute flex w-[4.6rem] -translate-x-1/2 -translate-y-1/2 flex-col
+                  items-center gap-0.5 rounded-xl p-1 transition
+                  ${canSelect ? "active:scale-95" : "pointer-events-none opacity-60"}`}
+              >
+                <span
+                  className={`flex h-11 w-11 items-center justify-center rounded-full
+                    border border-dashed text-[0.7rem]
+                    ${canSelect ? "border-gold/70 text-gold" : "border-line text-ink-mute"}`}
+                >
+                  {canSelect ? "坐这" : "空"}
+                </span>
+                <span className="flex w-full items-center justify-center gap-1">
+                  <span className="flex h-[1.15rem] min-w-[1.15rem] items-center justify-center
+                    rounded bg-surface-2 px-1 text-[0.72rem] font-bold leading-none tabular-nums
+                    text-ink-mute ring-1 ring-line">
+                    {seat + 1}
+                  </span>
+                </span>
+              </button>
+            );
+          }
 
           return (
             <button
@@ -123,6 +158,14 @@ export const SeatRing = ({
                 ) : voted || played || acked ? (
                   // 未揭晓时只显示「已操作」，绝不显示操作内容
                   <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-gold ring-2 ring-ground" />
+                ) : null}
+
+                {/* 准备好了打个勾。开局前用，开局后 game 非空就不显示了 */}
+                {game === null && player.ready ? (
+                  <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center
+                    justify-center rounded-full bg-blue text-[0.6rem] text-white ring-2 ring-ground">
+                    ✓
+                  </span>
                 ) : null}
 
                 {!player.connected ? (

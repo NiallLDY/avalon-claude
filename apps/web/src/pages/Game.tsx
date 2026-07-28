@@ -106,11 +106,11 @@ export const Game = () => {
   const lady = game.lady;
   const selectable: number[] =
     phase === "TEAM_BUILD" && me?.isLeader
-      ? room.seated.map((_, i) => i)
+      ? room.seats.map((_, i) => i)
       : phase === "LADY_OF_LAKE" && lady && lady.holderSeat === me?.seat
         ? [...lady.validTargets]
         : phase === "ASSASSINATION" && me?.canAssassinate
-          ? room.seated.map((_, i) => i).filter((i) => i !== me.seat)
+          ? room.seats.map((_, i) => i).filter((i) => i !== me.seat)
           : [];
 
   const toggle = (seat: number) => {
@@ -159,7 +159,7 @@ export const Game = () => {
       </div>
 
       <SeatRing
-        seated={room.seated}
+        seats={room.seats}
         game={game}
         selectable={selectable}
         selected={picked}
@@ -192,7 +192,7 @@ export const Game = () => {
               {phase === "MISSION" ? "正在执行任务的是" : "这一车"}
             </p>
             <div className="flex justify-center">
-              <PlayerChips seated={room.seated} seats={game.team} tone="gold" />
+              <PlayerChips seated={room.seats} seats={game.team} tone="gold" />
             </div>
           </div>
         ) : null}
@@ -209,8 +209,8 @@ export const Game = () => {
           picked={picked}
           isHost={isHost}
           onAct={act}
-          seatCount={room.seated.length}
-          who={labeler(room.seated)}
+          seatCount={room.seatCount}
+          who={labeler(room.seats)}
         />
 
         <nav className="flex gap-2 pt-1">
@@ -227,10 +227,10 @@ export const Game = () => {
       </div>
 
       <Sheet open={sheet === "role"} onOpenChange={(o) => setSheet(o ? "role" : null)} title="我的身份">
-        <RoleCard game={game} seated={room.seated} />
+        <RoleCard game={game} seated={room.seats} />
       </Sheet>
       <Sheet open={sheet === "report"} onOpenChange={(o) => setSheet(o ? "report" : null)} title="战报">
-        <Report game={game} seated={room.seated} />
+        <Report game={game} seated={room.seats} />
       </Sheet>
 
       {/* 对局中退出座位是保留的 —— 得说清楚怎么回来，不然人会以为把牌局搞砸了 */}

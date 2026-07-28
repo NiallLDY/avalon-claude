@@ -17,12 +17,12 @@ import { useStore, type ResultCard } from "../store.js";
  * zustand 按引用比较就认为状态变了，直接无限重渲染（React error #185）。
  * 兜底值要放在 selector 外面，用一个稳定的常量。
  */
-const NO_PLAYERS: readonly PublicPlayer[] = [];
+const NO_PLAYERS: readonly (PublicPlayer | null)[] = [];
 
 export const ResultOverlay = () => {
   const card = useStore((s) => s.result);
   const dismiss = useStore((s) => s.dismissResult);
-  const seated = useStore((s) => s.state?.room.seated) ?? NO_PLAYERS;
+  const seated = useStore((s) => s.state?.room.seats) ?? NO_PLAYERS;
   if (!card) return null;
 
   return (
@@ -42,7 +42,7 @@ const Body = ({
   seated,
 }: {
   card: ResultCard;
-  seated: readonly PublicPlayer[];
+  seated: readonly (PublicPlayer | null)[];
 }) => {
   if (card.kind === "VOTE") {
     const yes = card.votes.filter(Boolean).length;

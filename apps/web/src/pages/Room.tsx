@@ -1,5 +1,8 @@
 /**
- * 房间等待页。环形座位 + 换座位 + 房主设置面板 + 开始按钮。
+ * 房间等待页。选座 → 准备 → 房主开始。
+ *
+ * 选座是主动的：进房先在等待区，自己点一个和线下真实位置对应的号坐下。
+ * 全部坐满且全部准备，房主才能开局。
  */
 
 import { useState } from "react";
@@ -14,33 +17,28 @@ import {
   SETUP_STANDARD,
   isValidPlayerCount,
   type GameSettings,
+  type PublicPlayer,
   type RoleId,
 } from "@avalon/shared";
+import { Avatar } from "../components/Avatar.js";
 import { SeatRing } from "../components/SeatRing.js";
 import { Button, Segmented, Sheet, Toggle } from "../components/ui.js";
 import { labeler } from "../lib/labels.js";
 import { selfId, useStore } from "../store.js";
 
-/**
- * 当前人数会发到什么角色。
- * 「人数」本身不是一个可配置项 —— 阿瓦隆的人数就等于实际上桌的人数，
- * 但玩家需要知道这个人数对应什么牌面，所以把配置表直接摊开给他看。
- */
+/** 当前人数会发到什么角色。「几人局」由房主设定，这里把牌面摊开给大家看 */
 const RoleComposition = ({ count, mode }: { count: number; mode: GameSettings["mode"] }) => {
-  if (!isValidPlayerCount(count)) {
-    return (
-      <p className="text-xs text-ink-mute">
-        {count < MIN_PLAYERS
-          ? `还差 ${MIN_PLAYERS - count} 人才能开局（${MIN_PLAYERS}–${MAX_PLAYERS} 人）`
-          : `最多 ${MAX_PLAYERS} 人`}
-      </p>
-    );
-  }
-  const deck: readonly RoleId[] | undefined =
-    mode === "LANCELOT" ? SETUP_LANCELOT[count] : SETUP_STANDARD[count];
+  const deck: readonly RoleId[] | undefined = !isValidPlayerCount(count)
+    ? undefined
+    : mode === "LANCELOT"
+      ? SETUP_LANCELOT[count]
+      : SETUP_STANDARD[count];
+
   if (!deck) {
     return (
-      <p className="text-xs text-red">兰斯洛特模式至少 {LANCELOT_MIN_PLAYERS} 人</p>
+      <p className="text-xs text-red">
+        {mode === "LANCELOT" ? `兰斯洛特模式至少 ${LANCELOT_MIN_PLAYERS} 人` : "人数不对"}
+      </p>
     );
   }
 
@@ -69,33 +67,44 @@ const RoleComposition = ({ count, mode }: { count: number; mode: GameSettings["m
 
 export const Room = () => {
   const { state, emit, setSettings, leaveRoom, toast } = useStore();
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sheet, setSheet] = useState<"settings" | "manage" | null>(null);
   const [swapMode, setSwapMode] = useState(false);
+  const [manageTarget, setManageTarget] = useState<PublicPlayer | null>(null);
+  const [confirmDissolve, setConfirmDissolve] = useState(false);
   if (!state) return null;
 
   const { room } = state;
   const host = room.hostId === selfId;
-  const mySeat = room.seated.findIndex((p) => p.id === selfId);
-  const seated = mySeat >= 0;
-  const count = room.seated.length;
+  const me = [...room.seats, ...room.standing].find((p) => p?.id === selfId) ?? null;
+  const mySeat = me?.seat ?? null;
+  const seated = mySeat !== null;
+  const occupied = room.seats.filter((p): p is PublicPlayer => p !== null);
   const s = room.settings;
   const patch = (over: Partial<GameSettings>) => setSettings({ ...s, ...over });
+  const who = labeler(room.seats);
 
   const swap = room.pendingSwap;
   const incomingSwap = swap?.toPlayerId === selfId ? swap : null;
   const outgoingSwap = swap?.fromPlayerId === selfId ? swap : null;
-  const who = labeler(room.seated);
   const labelOf = (id: string) => {
-    const seat = room.seated.findIndex((p) => p.id === id);
+    const seat = room.seats.findIndex((p) => p?.id === id);
     return seat >= 0 ? who.full(seat) : "某人";
   };
 
-  const requestSwap = (seat: number) => {
-    const target = room.seated[seat];
-    if (!target || target.id === selfId) return;
-    emit("room:requestSwap", { targetPlayerId: target.id });
-    setSwapMode(false);
-    toast(`已向 ${who.full(seat)} 发出换座请求`);
+  const onSeatTap = (seat: number) => {
+    const occupant = room.seats[seat];
+    if (swapMode && occupant && occupant.id !== selfId) {
+      emit("room:requestSwap", { targetPlayerId: occupant.id });
+      setSwapMode(false);
+      toast(`已向 ${who.full(seat)} 发出换座请求`);
+      return;
+    }
+    if (host && occupant && occupant.id !== selfId) {
+      setManageTarget(occupant);
+      setSheet("manage");
+      return;
+    }
+    if (!occupant) emit("room:sit", { seatIndex: seat });
   };
 
   return (
@@ -114,7 +123,7 @@ export const Room = () => {
         </div>
         <button
           type="button"
-          onClick={() => setSettingsOpen(true)}
+          onClick={() => setSheet("settings")}
           className="rounded-lg px-2 py-1 text-sm text-ink-mute active:bg-surface"
         >
           设置
@@ -122,35 +131,29 @@ export const Room = () => {
       </header>
 
       <SeatRing
-        seated={room.seated}
+        seats={room.seats}
         game={null}
-        selectable={
-          swapMode ? room.seated.map((_, i) => i).filter((i) => i !== mySeat) : []
-        }
-        onSelect={requestSwap}
-        selfSeat={seated ? mySeat : null}
+        selfSeat={mySeat}
+        emptySelectable={!swapMode}
+        selectable={room.seats.flatMap((p, i) => (p && p.id !== selfId && (swapMode || host) ? [i] : []))}
+        onSelect={onSeatTap}
       >
         {swapMode ? (
           <p className="text-sm text-gold">点一个人跟他换座</p>
+        ) : seated ? (
+          <>
+            <p className="text-3xl font-bold tabular-nums text-gold">{mySeat + 1}号</p>
+            <p className="mt-1 text-sm text-ink-soft">你的座位</p>
+          </>
         ) : (
           <>
-            {seated ? (
-              <p className="text-3xl font-bold tabular-nums text-gold">{mySeat + 1}号</p>
-            ) : null}
-            <p className={seated ? "mt-1 text-sm text-ink-soft" : "text-2xl font-medium"}>
-              {seated ? `你的座位 · 共 ${count} 人` : `${count} 人`}
-            </p>
-            <p className="mt-1 text-xs text-ink-mute">
-              {s.mode === "LANCELOT" ? "兰斯洛特" : "标准"}
-              {s.ladyOfTheLake ? " · 湖中女神" : ""}
-              {s.earlyAssassination ? " · 提前刺杀" : ""}
-            </p>
+            <p className="text-lg font-medium">点一个空位坐下</p>
+            <p className="mt-1 text-xs text-ink-mute">挑跟你线下位置对应的号</p>
           </>
         )}
       </SeatRing>
 
       <footer className="shrink-0 space-y-2 px-4 pb-2">
-        {/* 换座请求：收到的要能一眼看到并处理 */}
         {incomingSwap ? (
           <div className="rounded-xl border border-gold/50 bg-gold/10 p-3">
             <p className="text-sm">
@@ -164,10 +167,7 @@ export const Room = () => {
               >
                 拒绝
               </Button>
-              <Button
-                className="flex-1"
-                onClick={() => emit("room:respondSwap", { accept: true })}
-              >
+              <Button className="flex-1" onClick={() => emit("room:respondSwap", { accept: true })}>
                 同意换座
               </Button>
             </div>
@@ -178,53 +178,112 @@ export const Room = () => {
           </p>
         ) : null}
 
-        {room.spectators.length > 0 ? (
-          <p className="text-center text-xs text-ink-mute">{room.spectators.length} 人观战</p>
+        {room.standing.length > 0 ? (
+          <div className="flex items-center gap-2 overflow-x-auto rounded-xl bg-surface px-3 py-2">
+            <span className="shrink-0 text-[0.7rem] text-ink-mute">等待区</span>
+            {room.standing.map((p) => (
+              <span key={p.id} className="flex shrink-0 items-center gap-1">
+                <Avatar avatar={p.avatar} size={22} dim={!p.connected} />
+                <span className="text-[0.7rem] text-ink-mute">{p.nick}</span>
+              </span>
+            ))}
+          </div>
         ) : null}
 
-        {room.startBlockedReason ? (
-          <p className="text-center text-xs text-ink-mute">{room.startBlockedReason}</p>
-        ) : null}
+        <p className="text-center text-xs text-ink-mute">
+          {room.startBlockedReason ?? `${occupied.length}/${room.seatCount} 就位，可以开始了`}
+        </p>
 
         <div className="flex gap-2">
           {seated ? (
-            <Button
-              tone={swapMode ? "gold" : "ghost"}
-              className="flex-1"
-              onClick={() => setSwapMode((v) => !v)}
-            >
-              {swapMode ? "取消" : "换座位"}
-            </Button>
+            <>
+              <Button tone="ghost" className="flex-1" onClick={() => emit("room:stand")}>
+                离座
+              </Button>
+              <Button
+                tone={swapMode ? "gold" : "ghost"}
+                className="flex-1"
+                onClick={() => setSwapMode((v) => !v)}
+              >
+                {swapMode ? "取消" : "换座"}
+              </Button>
+              <Button
+                tone={me?.ready ? "gold" : "blue"}
+                className="flex-[1.4]"
+                onClick={() => emit("room:ready", { ready: !me?.ready })}
+              >
+                {me?.ready ? "已准备" : "准备"}
+              </Button>
+            </>
           ) : (
-            <Button tone="ghost" className="flex-1" onClick={() => emit("room:sit")}>
-              入座
-            </Button>
-          )}
-          {host ? (
-            <Button
-              className="flex-[2]"
-              disabled={!room.canStart}
-              onClick={() => emit("game:start")}
-            >
-              开始游戏
-            </Button>
-          ) : (
-            <div className="flex-[2] self-center text-center text-sm text-ink-mute">
-              等房主开始
-            </div>
+            <p className="flex-1 self-center text-center text-sm text-ink-mute">点上面的空位入座</p>
           )}
         </div>
+
+        {host ? (
+          <Button className="w-full" disabled={!room.canStart} onClick={() => emit("game:start")}>
+            开始游戏
+          </Button>
+        ) : null}
       </footer>
 
-      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen} title="房间设置">
+      <Sheet
+        open={sheet === "manage"}
+        onOpenChange={(o) => setSheet(o ? "manage" : null)}
+        title={manageTarget ? `管理 ${manageTarget.nick}` : "管理"}
+      >
+        {manageTarget ? (
+          <div className="space-y-2 pb-2">
+            <Button
+              tone="ghost"
+              className="w-full"
+              onClick={() => {
+                emit("room:transferHost", { playerId: manageTarget.id });
+                setSheet(null);
+              }}
+            >
+              把房主给他
+            </Button>
+            <Button
+              tone="red"
+              className="w-full"
+              onClick={() => {
+                emit("room:kick", { playerId: manageTarget.id });
+                setSheet(null);
+              }}
+            >
+              请出房间
+            </Button>
+          </div>
+        ) : null}
+      </Sheet>
+
+      <Sheet
+        open={sheet === "settings"}
+        onOpenChange={(o) => setSheet(o ? "settings" : null)}
+        title="房间设置"
+      >
         <div className="flex flex-col gap-4 pt-1 pb-2">
-          {/* 人数不是配置项，但要让人看清当前人数发什么牌 */}
           <section className="rounded-xl bg-surface-2 p-3">
-            <div className="mb-2 flex items-baseline justify-between">
-              <span className="text-sm font-medium">{count} 人局</span>
-              <span className="text-[0.7rem] text-ink-mute">上桌几个人就是几人局</span>
+            <p className="mb-2 text-xs text-ink-mute">几人局</p>
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {Array.from({ length: MAX_PLAYERS - MIN_PLAYERS + 1 }, (_, i) => MIN_PLAYERS + i).map(
+                (n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    disabled={!host}
+                    onClick={() => emit("room:seatCount", { seatCount: n })}
+                    className={`min-h-9 w-9 rounded-lg text-sm tabular-nums transition
+                      disabled:opacity-40
+                      ${n === room.seatCount ? "bg-gold font-bold text-ground" : "bg-surface text-ink-soft"}`}
+                  >
+                    {n}
+                  </button>
+                ),
+              )}
             </div>
-            <RoleComposition count={count} mode={s.mode} />
+            <RoleComposition count={room.seatCount} mode={s.mode} />
           </section>
 
           {!host ? (
@@ -247,14 +306,12 @@ export const Room = () => {
             <Toggle
               label="湖中女神"
               hint={
-                count < LADY_MIN_PLAYERS
-                  ? `官方规则限 ${LADY_MIN_PLAYERS} 人及以上，当前 ${count} 人`
-                  : "第 2、3、4 轮任务后各查验一次阵营"
+                room.seatCount < LADY_MIN_PLAYERS
+                  ? `官方规则限 ${LADY_MIN_PLAYERS} 人及以上，现在 ${room.seatCount} 人`
+                  : "第 2、3、4 轮任务后各查一个人的阵营"
               }
               checked={s.ladyOfTheLake}
-              // 人数不足时不许开，但**已开启的必须还能关** ——
-              // 否则有人离座后房间会卡在「开不了局又关不掉」
-              disabled={!host || (count < LADY_MIN_PLAYERS && !s.ladyOfTheLake)}
+              disabled={!host || (room.seatCount < LADY_MIN_PLAYERS && !s.ladyOfTheLake)}
               onChange={(ladyOfTheLake) => patch({ ladyOfTheLake })}
             />
             <Toggle
@@ -269,7 +326,7 @@ export const Room = () => {
           {s.mode === "LANCELOT" ? (
             <div className="space-y-3 rounded-xl bg-surface-2 p-3">
               <div>
-                <p className="mb-2 text-xs text-ink-mute">忠诚牌翻牌时机</p>
+                <p className="mb-2 text-xs text-ink-mute">忠诚牌什么时候翻</p>
                 <Segmented
                   value={s.loyaltyFlipTiming}
                   onChange={(loyaltyFlipTiming) => host && patch({ loyaltyFlipTiming })}
@@ -280,7 +337,7 @@ export const Room = () => {
                 />
               </div>
               <div>
-                <p className="mb-2 text-xs text-ink-mute">阵营转换牌概率</p>
+                <p className="mb-2 text-xs text-ink-mute">换边的概率</p>
                 <Segmented
                   value={String(s.loyaltySwapChance)}
                   onChange={(v) => host && patch({ loyaltySwapChance: Number(v) })}
@@ -291,7 +348,7 @@ export const Room = () => {
                 />
               </div>
               <Toggle
-                label="隐藏翻牌结果"
+                label="不公开翻牌结果"
                 hint="别人只知道翻了一张牌，兰斯洛特自己仍能看到现在站哪边"
                 checked={s.hideLoyaltyFlipResult}
                 disabled={!host}
@@ -301,7 +358,7 @@ export const Room = () => {
           ) : null}
 
           <div>
-            <p className="mb-2 text-xs text-ink-mute">流局计数</p>
+            <p className="mb-2 text-xs text-ink-mute">流局怎么算</p>
             <Segmented
               value={s.rejectCounting}
               onChange={(rejectCounting) => host && patch({ rejectCounting })}
@@ -313,7 +370,7 @@ export const Room = () => {
           </div>
 
           <div>
-            <p className="mb-2 text-xs text-ink-mute">队长轮转</p>
+            <p className="mb-2 text-xs text-ink-mute">队长怎么轮</p>
             <Segmented
               value={s.leaderRotation}
               onChange={(leaderRotation) => host && patch({ leaderRotation })}
@@ -325,9 +382,36 @@ export const Room = () => {
           </div>
 
           {host ? (
-            <Button tone="ghost" onClick={() => emit("room:shuffleSeats")}>
-              打乱座次
-            </Button>
+            <div className="space-y-2 pt-2">
+              <Button tone="ghost" className="w-full" onClick={() => emit("room:shuffleSeats")}>
+                随机打乱座次
+              </Button>
+              {confirmDissolve ? (
+                <div className="rounded-xl border border-red/50 bg-red/10 p-3">
+                  <p className="mb-2 text-sm">解散之后房间就没了，所有人回大厅。</p>
+                  <div className="flex gap-2">
+                    <Button tone="ghost" className="flex-1" onClick={() => setConfirmDissolve(false)}>
+                      算了
+                    </Button>
+                    <Button
+                      tone="red"
+                      className="flex-1"
+                      onClick={() => {
+                        emit("room:dissolve");
+                        setConfirmDissolve(false);
+                        setSheet(null);
+                      }}
+                    >
+                      确认解散
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button tone="red" className="w-full" onClick={() => setConfirmDissolve(true)}>
+                  解散房间
+                </Button>
+              )}
+            </div>
           ) : null}
         </div>
       </Sheet>

@@ -42,12 +42,12 @@ export const GameOver = ({ game }: { game: ClientGameView }) => {
         <p className="mt-1 text-xs text-ink-mute">{REASON[outcome.reason] ?? ""}</p>
         {outcome.assassinatedSeat !== null ? (
           <p className="mt-0.5 text-xs text-ink-mute">
-            刺客选择了 {labeler(room.seated).full(outcome.assassinatedSeat)}
+            刺客选择了 {labeler(room.seats).full(outcome.assassinatedSeat)}
           </p>
         ) : null}
       </header>
 
-      <SeatRing seated={room.seated} game={game} selfSeat={game.me?.seat ?? null}>
+      <SeatRing seats={room.seats} game={game} selfSeat={game.me?.seat ?? null}>
         {myRole ? (
           <div>
             <p className="text-xs text-ink-mute">{game.me!.seat + 1}号 · 你是</p>
@@ -86,7 +86,7 @@ export const GameOver = ({ game }: { game: ClientGameView }) => {
       </div>
 
       <Sheet open={reportOpen} onOpenChange={setReportOpen} title="战报">
-        <Report game={game} seated={room.seated} />
+        <Report game={game} seated={room.seats} />
       </Sheet>
     </div>
   );

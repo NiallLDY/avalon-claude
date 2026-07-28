@@ -4,8 +4,12 @@
  * 房间状态的**唯一真相在内存**，Redis 只是防进程重启的快照（见 store.ts）。
  * 时间由调用方注入 `now`，方便测试推进时钟。
  *
- * 座位模型：`seats` 是一个**有序的 playerId 数组**，索引就是引擎的 seatIndex。
- * 这样线下的环形落座顺序和引擎座位号天然一一对应，不需要额外映射。
+ * 座位模型：房主先定「几人局」（`seatCount`），`seats` 是等长的**定长槽位数组**，
+ * 空位为 `null`，玩家点空位入座。索引就是引擎的 seatIndex，
+ * 线下环形落座顺序和座位号天然一一对应。
+ *
+ * 之所以不是「入座即追加」：线下是先坐好再开始的，
+ * 得让人挑一个和自己真实位置对应的号，而不是按点击先后被分配。
  */
 
 import {
@@ -42,6 +46,8 @@ export interface RoomPlayer {
   nick: string;
   avatar: Avatar;
   connected: boolean;
+  /** 已准备。座位或规则一变就清掉，逼大家重新确认一次 */
+  ready: boolean;
   /** 断线时刻，用于房主自动移交与 GC */
   disconnectedAt: number | null;
 }
@@ -55,8 +61,10 @@ export interface Room {
   /** 房主掉线的时刻。回到在线就清空 */
   hostOfflineSince: number | null;
   readonly players: Map<string, RoomPlayer>;
-  /** 有序环形座次，索引即 seatIndex */
-  seats: string[];
+  /** 几人局。房主设定，5–10 */
+  seatCount: number;
+  /** 定长槽位，长度恒为 seatCount，空位为 null */
+  seats: (string | null)[];
   settings: GameSettings;
   game: GameState | null;
   readonly createdAt: number;
@@ -77,16 +85,23 @@ const err = (error: ServerErrorCode | string): RoomResult<never> => ({ ok: false
 // ──────────────────────────── 查询 ────────────────────────────
 
 export const seatOf = (room: Room, playerId: string): number => room.seats.indexOf(playerId);
+/** 当前在座的人（跳过空位） */
+export const occupants = (room: Room): string[] =>
+  room.seats.filter((id): id is string => id !== null);
+export const emptySeats = (room: Room): number[] =>
+  room.seats.flatMap((id, i) => (id === null ? [i] : []));
 export const isSeated = (room: Room, playerId: string): boolean => seatOf(room, playerId) >= 0;
 export const isHost = (room: Room, playerId: string): boolean => room.hostId === playerId;
 export const isInGame = (room: Room): boolean => room.game !== null && room.game.phase !== "GAME_OVER";
 
 /** 开局前的合法性检查。理由要能直接显示给房主看 */
 export const startBlockedReason = (room: Room): string | null => {
-  const n = room.seats.length;
-  if (!isValidPlayerCount(n)) {
-    return n < MIN_PLAYERS ? `还差 ${MIN_PLAYERS - n} 人才能开局` : `最多 ${MAX_PLAYERS} 人`;
-  }
+  const n = room.seatCount;
+  if (!isValidPlayerCount(n)) return `人数要在 ${MIN_PLAYERS}–${MAX_PLAYERS} 之间`;
+
+  const empty = emptySeats(room).length;
+  if (empty > 0) return `还有 ${empty} 个空位没人坐`;
+
   if (room.settings.mode === "LANCELOT" && n < LANCELOT_MIN_PLAYERS) {
     return `兰斯洛特模式至少 ${LANCELOT_MIN_PLAYERS} 人`;
   }
@@ -94,9 +109,13 @@ export const startBlockedReason = (room: Room): string | null => {
   if (room.settings.ladyOfTheLake && n < LADY_MIN_PLAYERS) {
     return `湖中女神至少 ${LADY_MIN_PLAYERS} 人，现在 ${n} 人`;
   }
-  if (room.seats.some((id) => !room.players.get(id)?.connected)) {
-    return "有玩家掉线，等他回来或先请他离座";
-  }
+
+  const offline = occupants(room).filter((id) => !room.players.get(id)?.connected).length;
+  if (offline > 0) return `有 ${offline} 人掉线了，等他回来或请他离座`;
+
+  const notReady = occupants(room).filter((id) => !room.players.get(id)?.ready).length;
+  if (notReady > 0) return `还有 ${notReady} 人没准备`;
+
   return null;
 };
 
@@ -109,10 +128,11 @@ const toPublic = (room: Room, player: RoomPlayer, seat: number | null): PublicPl
   seat,
   connected: player.connected,
   isHost: room.hostId === player.id,
+  ready: player.ready,
 });
 
 export const roomView = (room: Room): RoomView => {
-  const seatedIds = new Set(room.seats);
+  const seatedIds = new Set(occupants(room));
   return {
     id: room.id,
     name: room.name,
@@ -120,8 +140,12 @@ export const roomView = (room: Room): RoomView => {
     allowSpectators: room.allowSpectators,
     hostId: room.hostId,
     settings: room.settings,
-    seated: room.seats.map((id, seat) => toPublic(room, room.players.get(id)!, seat)),
-    spectators: [...room.players.values()]
+    seatCount: room.seatCount,
+    seats: room.seats.map((id, seat) => {
+      const player = id === null ? undefined : room.players.get(id);
+      return player ? toPublic(room, player, seat) : null;
+    }),
+    standing: [...room.players.values()]
       .filter((p) => !seatedIds.has(p.id))
       .map((p) => toPublic(room, p, null)),
     inGame: room.game !== null,
@@ -142,7 +166,7 @@ export const roomView = (room: Room): RoomView => {
 export const roomSummary = (room: Room): RoomSummary => ({
   id: room.id,
   name: room.name,
-  playerCount: room.seats.length,
+  playerCount: occupants(room).length,
   inGame: isInGame(room),
   allowSpectators: room.allowSpectators,
 });
@@ -183,7 +207,8 @@ export const createRoom = (opts: {
     hostId: opts.hostId,
     hostOfflineSince: null,
     players: new Map(),
-    seats: [],
+    seatCount: MIN_PLAYERS,
+    seats: Array.from({ length: MIN_PLAYERS }, () => null),
     settings: DEFAULT_SETTINGS,
     game: null,
     createdAt: opts.now,
@@ -225,7 +250,8 @@ export const joinRoom = (
     return ok(existing);
   }
 
-  if (!room.allowSpectators && room.seats.length >= MAX_PLAYERS) return err("ROOM_FULL");
+  // 等待区不限人数；不允许观战的房间，坐满之后就别再放人进来了
+  if (!room.allowSpectators && emptySeats(room).length === 0) return err("ROOM_FULL");
 
   const created: RoomPlayer = {
     id: player.id,
@@ -233,6 +259,7 @@ export const joinRoom = (
     nick: player.nick,
     avatar: player.avatar,
     connected: true,
+    ready: false,
     disconnectedAt: null,
   };
   room.players.set(player.id, created);
@@ -244,6 +271,7 @@ export const markDisconnected = (room: Room, playerId: string, now: number): voi
   const player = room.players.get(playerId);
   if (!player) return;
   player.connected = false;
+  player.ready = false;
   player.disconnectedAt = now;
   if (room.hostId === playerId) room.hostOfflineSince = now;
 
@@ -262,7 +290,7 @@ export const maybeTransferHost = (room: Room, now: number): string | null => {
   if (room.hostOfflineSince === null) return null;
   if (now - room.hostOfflineSince < config.hostTransferAfterMs) return null;
 
-  const bySeat = room.seats.find((id) => room.players.get(id)?.connected);
+  const bySeat = occupants(room).find((id) => room.players.get(id)?.connected);
   const fallback = [...room.players.values()].find((p) => p.connected)?.id;
   const next = bySeat ?? fallback;
   if (!next || next === room.hostId) return null;
@@ -280,10 +308,10 @@ export const leaveRoom = (room: Room, playerId: string, now: number): void => {
     return;
   }
   dropSwapInvolving(room, playerId);
-  room.seats = room.seats.filter((id) => id !== playerId);
+  room.seats = room.seats.map((id) => (id === playerId ? null : id));
   room.players.delete(playerId);
   if (room.hostId === playerId) {
-    const next = room.seats.find((id) => room.players.get(id)?.connected)
+    const next = occupants(room).find((id) => room.players.get(id)?.connected)
       ?? [...room.players.values()].find((p) => p.connected)?.id;
     if (next) {
       room.hostId = next;
@@ -295,12 +323,33 @@ export const leaveRoom = (room: Room, playerId: string, now: number): void => {
 
 // ──────────────────────────── 座位 ────────────────────────────
 
-export const sit = (room: Room, playerId: string, now: number): RoomResult => {
+/** 清掉所有人的准备。座位或规则一变就该重新确认一次，不能拿旧的准备开局 */
+const clearReady = (room: Room): void => {
+  for (const player of room.players.values()) player.ready = false;
+};
+
+/** 坐到指定空位。已经坐着的人换到别的空位也走这里 */
+export const sit = (
+  room: Room,
+  playerId: string,
+  seatIndex: number,
+  now: number,
+): RoomResult => {
   if (isInGame(room)) return err("ROOM_IN_GAME");
   if (!room.players.has(playerId)) return err("ROOM_NOT_FOUND");
-  if (isSeated(room, playerId)) return err("ALREADY_SEATED");
-  if (room.seats.length >= MAX_PLAYERS) return err("ROOM_FULL");
-  room.seats.push(playerId);
+  if (!Number.isInteger(seatIndex) || seatIndex < 0 || seatIndex >= room.seatCount) {
+    return err("INVALID_SEAT");
+  }
+  const occupant = room.seats[seatIndex];
+  if (occupant === playerId) return err("ALREADY_SEATED");
+  if (occupant !== null) return err("这个位子有人了");
+
+  // 换位：先从原位置起来
+  room.seats = room.seats.map((id, i) =>
+    i === seatIndex ? playerId : id === playerId ? null : id,
+  );
+  dropSwapInvolving(room, playerId);
+  clearReady(room);
   touch(room, now);
   return ok(undefined);
 };
@@ -308,41 +357,66 @@ export const sit = (room: Room, playerId: string, now: number): RoomResult => {
 export const stand = (room: Room, playerId: string, now: number): RoomResult => {
   if (isInGame(room)) return err("ROOM_IN_GAME");
   if (!isSeated(room, playerId)) return err("NOT_SEATED");
+  room.seats = room.seats.map((id) => (id === playerId ? null : id));
   dropSwapInvolving(room, playerId);
-  if (!room.allowSpectators) {
-    // 不允许观战的房间里，起立等于离开
-    leaveRoom(room, playerId, now);
-    return ok(undefined);
-  }
-  room.seats = room.seats.filter((id) => id !== playerId);
+  clearReady(room);
   touch(room, now);
   return ok(undefined);
 };
 
-/** 房主调整环形座次。新顺序必须是当前落座者的一个排列，不能借机塞人或踢人 */
-export const reorderSeats = (
+/** 准备。只有在座的人需要准备 */
+export const setReady = (
   room: Room,
-  order: readonly string[],
+  playerId: string,
+  ready: boolean,
   now: number,
 ): RoomResult => {
   if (isInGame(room)) return err("ROOM_IN_GAME");
-  if (order.length !== room.seats.length) return err("座位顺序必须包含且仅包含当前落座的玩家");
-  const current = new Set(room.seats);
-  if (new Set(order).size !== order.length) return err("座位顺序里有重复玩家");
-  if (!order.every((id) => current.has(id))) return err("座位顺序里有不在座的玩家");
-  room.seats = [...order];
+  const player = room.players.get(playerId);
+  if (!player) return err("ROOM_NOT_FOUND");
+  if (!isSeated(room, playerId)) return err("NOT_SEATED");
+  player.ready = ready;
   touch(room, now);
   return ok(undefined);
 };
 
+/**
+ * 房主设定几人局。缩小时把多出来的人请回等待区，不是踢出房间 ——
+ * 人还在，只是没座位了。
+ */
+export const setSeatCount = (
+  room: Room,
+  actorId: string,
+  seatCount: number,
+  now: number,
+): RoomResult => {
+  if (!isHost(room, actorId)) return err("NOT_HOST");
+  if (isInGame(room)) return err("ROOM_IN_GAME");
+  if (!isValidPlayerCount(seatCount)) return err(`人数要在 ${MIN_PLAYERS}–${MAX_PLAYERS} 之间`);
+
+  const next: (string | null)[] = Array.from({ length: seatCount }, (_, i) =>
+    i < room.seats.length ? (room.seats[i] ?? null) : null,
+  );
+  room.seatCount = seatCount;
+  room.seats = next;
+  room.pendingSwap = null;
+  clearReady(room);
+  touch(room, now);
+  return ok(undefined);
+};
+
+/** 打乱座次：把当前在座的人重新分配到各个位子上 */
 export const shuffleSeats = (room: Room, now: number): RoomResult => {
   if (isInGame(room)) return err("ROOM_IN_GAME");
-  const seats = [...room.seats];
-  for (let i = seats.length - 1; i > 0; i--) {
+  const people = occupants(room);
+  for (let i = people.length - 1; i > 0; i--) {
     const j = cryptoRng.int(i + 1);
-    [seats[i], seats[j]] = [seats[j]!, seats[i]!];
+    [people[i], people[j]] = [people[j]!, people[i]!];
   }
-  room.seats = seats;
+  const slots = Array.from({ length: room.seatCount }, () => null as string | null);
+  for (const [i, id] of people.entries()) slots[i] = id;
+  room.seats = slots;
+  clearReady(room);
   touch(room, now);
   return ok(undefined);
 };
@@ -410,6 +484,7 @@ export const respondSwap = (
   const seats = [...room.seats];
   [seats[a], seats[b]] = [seats[b]!, seats[a]!];
   room.seats = seats;
+  clearReady(room);
   touch(room, now);
   return ok(undefined);
 };
@@ -431,7 +506,7 @@ export const kick = (room: Room, actorId: string, targetId: string, now: number)
   if (targetId === actorId) return err("不能踢自己，先移交房主");
   if (isInGame(room) && isSeated(room, targetId)) return err("ROOM_IN_GAME");
   if (!room.players.has(targetId)) return err("ROOM_NOT_FOUND");
-  room.seats = room.seats.filter((id) => id !== targetId);
+  room.seats = room.seats.map((id) => (id === targetId ? null : id));
   room.players.delete(targetId);
   touch(room, now);
   return ok(undefined);
@@ -455,6 +530,8 @@ export const setSettings = (
   if (!isHost(room, actorId)) return err("NOT_HOST");
   if (isInGame(room)) return err("ROOM_IN_GAME");
   room.settings = settings;
+  // 规则变了，之前的准备作废 —— 别让人在不知情的情况下被开进新规则的局
+  clearReady(room);
   touch(room, now);
   return ok(undefined);
 };
@@ -477,6 +554,15 @@ export const setOptions = (
   return ok(undefined);
 };
 
+/**
+ * 房主解散房间。房间会被直接销毁，所有人回大厅。
+ * 这是不可逆的，前端要二次确认。
+ */
+export const canDissolve = (room: Room, actorId: string): RoomResult => {
+  if (!isHost(room, actorId)) return err("NOT_HOST");
+  return ok(undefined);
+};
+
 // ──────────────────────────── 对局 ────────────────────────────
 
 export const startGame = (room: Room, actorId: string, now: number): RoomResult => {
@@ -485,7 +571,7 @@ export const startGame = (room: Room, actorId: string, now: number): RoomResult 
   const blocked = startBlockedReason(room);
   if (blocked) return err(blocked);
 
-  const playerCount = room.seats.length;
+  const playerCount = room.seatCount;
   // startBlockedReason 已经查过，这里是给类型收窄用的，顺带兜底
   if (!isValidPlayerCount(playerCount)) return err("CANNOT_START");
 
@@ -511,7 +597,7 @@ export const restartGame = (
     return started;
   }
   if (rotateFirstLeader && previous && room.game) {
-    const next = (previous.leaderSeat + 1) % room.seats.length;
+    const next = (previous.leaderSeat + 1) % room.seatCount;
     room.game = { ...(room.game as GameState), leaderSeat: next };
   }
   return ok(undefined);

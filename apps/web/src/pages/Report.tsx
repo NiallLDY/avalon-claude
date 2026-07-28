@@ -14,7 +14,7 @@ export const Report = ({
   seated,
 }: {
   game: ClientGameView;
-  seated: readonly PublicPlayer[];
+  seated: readonly (PublicPlayer | null)[];
 }) => (
   <div className="space-y-4 pb-2 text-sm">
     {game.missions.length === 0 && game.proposals.length === 0 ? (
