@@ -7,7 +7,14 @@
  */
 
 import { useEffect, useState } from "react";
-import { ROLES, TEAM_SIZE, isProtectedRound, type ClientGameView } from "@avalon/shared";
+import {
+  REJECT_LIMIT,
+  ROLES,
+  TEAM_SIZE,
+  isProtectedRound,
+  type ClientGameView,
+  type RoomView,
+} from "@avalon/shared";
 import { PlayerChips } from "../components/PlayerChip.js";
 import { SeatBoard } from "../components/SeatBoard.js";
 import { RoleCard } from "../components/RoleCard.js";
@@ -16,13 +23,13 @@ import { Report } from "./Report.js";
 import { labeler, seatNo } from "../lib/labels.js";
 import { selfId, useStore } from "../store.js";
 
-/** 顶部：5 轮任务进度 + 流局计数 + 我是几号 */
-const Progress = ({ game }: { game: ClientGameView }) => {
+/** 顶部：5 轮任务进度 + 房间名/码 + 延迟 + 流局 + 我是几号 */
+const Progress = ({ game, room }: { game: ClientGameView; room: RoomView }) => {
   const sizes = TEAM_SIZE[game.playerCount as 5] ?? [];
   return (
-    // 三组东西挤一行，每组都得 shrink-0 —— 否则「流局」会被压成竖排、
-    // 「你是1号」会换行，顶栏一高就把座位区挤下去了
-    <div className="flex items-center justify-between gap-2 px-3 py-2">
+    // 左右两组固定宽度，中间那组吃掉剩余空间。每组都得 shrink-0 ——
+    // 否则「你是1号」会换行，顶栏一高就把座位区挤下去了
+    <div className="flex items-center justify-between gap-2 px-3 py-1.5">
       <div className="flex shrink-0 gap-1">
         {sizes.map((size, round) => {
           const done = game.missions[round];
@@ -44,22 +51,30 @@ const Progress = ({ game }: { game: ClientGameView }) => {
         })}
       </div>
 
-      {/* 对局页没有房间名，顶栏正中就是这里 */}
-      <Latency />
+      {/*
+        房间名 + 房间码。对局中途要退出再回来全靠这个码，
+        以前只藏在「离开这局？」的弹窗里，等你想退出时才看得到，太晚了。
+      */}
+      <div className="flex min-w-0 flex-1 flex-col items-center leading-none">
+        {/*
+          延迟挂在房名这行而不是房间码那行：房名可以被截，房间码不行 ——
+          少一个字母的房间码是回不来的。流局标出现时中间这块会被压窄，
+          能被牺牲的必须是房名。
+        */}
+        <span className="flex min-w-0 max-w-full items-center gap-1.5">
+          <span className="min-w-0 truncate text-[0.62rem] text-ink-mute">{room.name}</span>
+          <Latency />
+        </span>
+        <span className="mt-0.5 font-display text-[0.7rem] tracking-widest whitespace-nowrap text-gold">
+          {room.id}
+        </span>
+      </div>
 
-      <div className="flex shrink-0 items-center gap-1.5">
-        <div className="flex shrink-0 items-center gap-1">
-          <span className="shrink-0 text-[0.65rem] whitespace-nowrap text-ink-mute">流局</span>
-          {[0, 1, 2, 3, 4].map((i) => (
-            <span
-              key={i}
-              className={`h-2 w-2 rounded-full ${
-                i < game.rejectStreak ? "bg-red" : "bg-surface-2"
-              }`}
-            />
-          ))}
-        </div>
-
+      {/*
+        右边跟中间一样叠成两行。中间那列已经把这一行撑成两行高了，
+        第二行是白捡的空间 —— 流局标放这儿就不跟房间名抢宽度。
+      */}
+      <div className="flex shrink-0 flex-col items-end gap-0.5">
         {/* 我是几号 —— 常驻，投票和讨论全程都要用 */}
         {game.me ? (
           <span className="flex shrink-0 items-center gap-1 rounded-md bg-ink px-1.5 py-0.5 whitespace-nowrap text-ground">
@@ -73,6 +88,16 @@ const Progress = ({ game }: { game: ClientGameView }) => {
             观战
           </span>
         )}
+
+        {/*
+          流局。**0 次时整个不显示** —— 常驻 5 个空点是纯噪音，
+          而连续 {REJECT_LIMIT} 次红方直接赢，所以一旦开始流局就必须看得见。
+        */}
+        {game.rejectStreak > 0 ? (
+          <span className="rounded bg-red/20 px-1 text-[0.6rem] leading-[0.95rem] whitespace-nowrap text-red tabular-nums">
+            流局 {game.rejectStreak}/{REJECT_LIMIT}
+          </span>
+        ) : null}
       </div>
     </div>
   );
@@ -166,7 +191,7 @@ export const Game = () => {
   return (
     <div className="flex h-full min-h-0 flex-col safe-top safe-bottom">
       <div className="shrink-0">
-        <Progress game={game} />
+        <Progress game={game} room={room} />
       </div>
 
       <SeatBoard

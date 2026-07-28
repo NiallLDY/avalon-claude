@@ -304,6 +304,12 @@ test.describe("退出房间", () => {
 
     const quitter = pages[4]!;
     await expect(quitter.getByRole("button", { name: "我已看牌" })).toBeVisible();
+
+    // 对局中也要能看到房间名和房间码。以前只藏在「离开这局？」的弹窗里 ——
+    // 等你想退出时才看得到房间码，那时候已经晚了
+    await expect(quitter.getByText("退出测试")).toBeVisible();
+    await expect(quitter.locator("p.font-display, span.font-display").filter({ hasText: code }).first()).toBeVisible();
+
     await quitter.getByRole("button", { name: "退出" }).click();
     // 对局中退出要先确认 —— 座位会保留，这件事必须说清楚
     await expect(quitter.getByText(/座位会一直留着/)).toBeVisible();
