@@ -15,6 +15,7 @@ import type {
   RoomSummary,
   StatePayload,
 } from "@avalon/shared";
+import { recordGame } from "./lib/history.js";
 import {
   clearLastRoom,
   hasProfile,
@@ -129,6 +130,29 @@ interface AppState {
 }
 
 const identity = loadIdentity();
+
+/**
+ * 把打完的一局记进本地战绩。观战的不记 —— 没参与就没有胜负。
+ * `recordGame` 自己会去重，所以刷新、重连导致的重复调用是安全的。
+ */
+const recordFinished = (payload: StatePayload): void => {
+  const game = payload.game;
+  const me = game?.me;
+  if (!game?.outcome || !me || !game.reveal) return;
+
+  recordGame({
+    roomId: payload.room.id,
+    roomName: payload.room.name,
+    playerCount: game.playerCount,
+    roleId: me.roleId,
+    side: me.side,
+    winner: game.outcome.winner,
+    won: me.side === game.outcome.winner,
+    reason: game.outcome.reason,
+    deal: game.reveal.join(""),
+  });
+};
+
 let toastSeq = 0;
 let resultSeq = 0;
 let reactionSeq = 0;
@@ -227,8 +251,12 @@ export const useStore = create<AppState>((set, get) => ({
       set({ state: payload, restoring: false });
 
       // 终局画面留一份在本地，等本人点掉；新的一局开始就顶掉它
-      if (payload.game?.phase === "GAME_OVER") set({ finishedGame: payload.game });
-      else if (payload.game !== null) set({ finishedGame: null });
+      if (payload.game?.phase === "GAME_OVER") {
+        set({ finishedGame: payload.game });
+        recordFinished(payload);
+      } else if (payload.game !== null) {
+        set({ finishedGame: null });
+      }
     });
 
     socket.on("room:list", ({ rooms }: { rooms: RoomSummary[] }) => set({ rooms }));

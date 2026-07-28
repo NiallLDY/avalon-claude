@@ -244,5 +244,17 @@ test("拍完整一局", async ({ browser }) => {
   await expect(host.getByText(/^\d+\/5 已看牌$/)).toBeVisible();
   await shot(host, "再来一局-新局开始");
 
+  // ── 本地战绩 ──
+  // 上面刚开了新一局：身份卡会自动弹出来，模态盖着的时候 getByRole 看不到底下的按钮
+  await host.keyboard.press("Escape");
+  await expect(host.getByRole("dialog")).toHaveCount(0);
+  // 对局页退出要走确认
+  await host.getByRole("button", { name: "退出", exact: true }).click();
+  await host.getByRole("button", { name: "离开", exact: true }).click();
+  await expect(host.getByRole("button", { name: "开房间" })).toBeVisible();
+  await host.getByRole("button", { name: "我的战绩" }).click();
+  await expect(host.getByText("总胜率")).toBeVisible();
+  await shot(host, "战绩");
+
   for (const ctx of contexts) await ctx.close();
 });

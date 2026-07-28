@@ -571,6 +571,30 @@ test.describe("终局", () => {
     await host.getByRole("button", { name: "再来一局" }).click();
     await expect(host.getByRole("button", { name: "准备" })).toBeVisible();
 
+    /*
+     * 打完的局要进本地战绩。服务端不知道「你」跨局是同一个人（无账号系统），
+     * 所以战绩只能记在这台手机上。
+     */
+    await host.getByRole("button", { name: "← 退出" }).click();
+    await expect(host.getByRole("button", { name: "开房间" })).toBeVisible();
+    await host.getByRole("button", { name: "我的战绩" }).click();
+
+    await expect(host.getByText("总胜率")).toBeVisible();
+    // 这一局是红方靠连续流局赢的
+    await expect(host.getByText("连续五次流局")).toBeVisible();
+    await expect(host.getByText(/共 1 局/)).toBeVisible();
+
+    // 刷新之后战绩还在 —— 存 localStorage 才算数，存内存等于没存
+    await host.reload();
+    await expect(host.getByRole("button", { name: "开房间" })).toBeVisible();
+    await host.getByRole("button", { name: "我的战绩" }).click();
+    await expect(host.getByText(/共 1 局/)).toBeVisible();
+
+    // 点开某一局能看到那局的完整战报（服务端存着，7 天内有效）
+    await host.getByText("连续五次流局").click();
+    await expect(host.getByText("← 回到战绩")).toBeVisible();
+    await expect(host.getByText(/第 1 轮/)).toBeVisible();
+
     for (const c of ctxs) await c.close();
   });
 });

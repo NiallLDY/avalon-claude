@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { ROOM_NAME_MAX, sanitizeText } from "@avalon/shared";
 import { ProfileEditor } from "../components/Profile.js";
+import { History } from "./History.js";
 import { Button, Sheet, Toggle } from "../components/ui.js";
 import { useStore } from "../store.js";
 
@@ -14,6 +15,7 @@ export const Lobby = () => {
   const [query, setQuery] = useState("");
   const [code, setCode] = useState("");
   const [creating, setCreating] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [roomName, setRoomName] = useState("");
   const [isPrivate, setPrivate] = useState(false);
   const [allowSpectators, setAllowSpectators] = useState(true);
@@ -40,14 +42,23 @@ export const Lobby = () => {
         <h1 className="text-center font-display text-xl tracking-[0.2em] text-gold">
           MELBOURNE 阿瓦隆
         </h1>
-        <button
-          type="button"
-          onClick={() => useStore.getState().setRulesOpen(true)}
-          className="mx-auto block text-center text-xs text-ink-mute underline decoration-dotted
-            underline-offset-4 active:text-gold"
-        >
-          线下面对面玩阿瓦隆用的发牌器 · 看规则
-        </button>
+        <div className="flex items-center justify-center gap-3 text-xs text-ink-mute">
+          <button
+            type="button"
+            onClick={() => useStore.getState().setRulesOpen(true)}
+            className="underline decoration-dotted underline-offset-4 active:text-gold"
+          >
+            看规则
+          </button>
+          <span className="text-line">·</span>
+          <button
+            type="button"
+            onClick={() => setHistoryOpen(true)}
+            className="underline decoration-dotted underline-offset-4 active:text-gold"
+          >
+            我的战绩
+          </button>
+        </div>
       </header>
 
       {/* 身份卡 —— 无账号，改完即生效 */}
@@ -153,6 +164,8 @@ export const Lobby = () => {
           <Button onClick={() => void submitCreate()}>创建</Button>
         </div>
       </Sheet>
+
+      {historyOpen ? <History onClose={() => setHistoryOpen(false)} /> : null}
     </div>
   );
 };

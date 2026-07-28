@@ -414,7 +414,14 @@ export const attachSocket = (io: IOServer, registry: Registry, store: Store): vo
       pushEvents(room, outcome.value.events);
 
       if (room.game?.phase === "GAME_OVER") {
-        void store.saveReport(room.id, { finishedAt: now(), game: stateFor(room, "").game });
+        // 连 room 一起存：战报里全是座位号，没有名单就只剩一串数字，复盘时对不上人。
+        // 存的是观战者视角（playerId 传空串），里面本来就只有公开信息
+        const snapshot = stateFor(room, "");
+        void store.saveReport(room.id, {
+          finishedAt: now(),
+          room: snapshot.room,
+          game: snapshot.game,
+        });
         pushLobby();
       }
     });
