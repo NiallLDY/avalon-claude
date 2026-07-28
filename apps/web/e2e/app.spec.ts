@@ -350,6 +350,13 @@ test.describe("规则", () => {
     await expect(page.getByText("每轮上几个人")).toBeVisible();
     await expect(page.getByText(/保护轮/).first()).toBeVisible();
 
+    // 几人局发什么牌要写在规则页里，不能只丢一句「去房间设置里看」
+    await expect(page.getByText("几人局都有谁")).toBeVisible();
+    await expect(page.getByText(/忠臣×2/).first()).toBeVisible();
+    // 9 人才有莫德雷德，5 人没有 —— 表里得能查到这种差别
+    await expect(page.getByText(/莫甘娜、刺客、莫德雷德/).first()).toBeVisible();
+    await expect(page.getByText(/兰斯洛特模式（7 人起）/)).toBeVisible();
+
     await page.getByRole("button", { name: "角色图鉴" }).click();
     await expect(page.getByText("莫德雷德", { exact: true })).toBeVisible();
     await expect(page.getByText(/梅林看不见你/)).toBeVisible();

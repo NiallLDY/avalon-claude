@@ -50,6 +50,8 @@ test("拍完整一局", async ({ browser }) => {
   // 规则页
   await host.getByRole("button", { name: /看规则/ }).click();
   await shot(host, "规则-流程");
+  await host.getByText("几人局都有谁").scrollIntoViewIfNeeded();
+  await shot(host, "规则-配牌表");
   await host.getByRole("button", { name: "角色图鉴" }).click();
   await shot(host, "规则-角色图鉴");
   await host.getByRole("button", { name: "← 返回" }).click();

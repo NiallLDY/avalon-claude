@@ -17,6 +17,8 @@ import {
   REJECT_LIMIT,
   ROLES,
   ROLE_IDS,
+  SETUP_LANCELOT,
+  SETUP_STANDARD,
   TEAM_SIZE,
   isProtectedRound,
   type PlayerCount,
@@ -33,6 +35,39 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
     <div className="space-y-2 text-sm leading-relaxed text-ink-soft">{children}</div>
   </section>
 );
+
+/** 一副牌里某一方的角色，数成「忠臣×2」这种给人看的形式 */
+const tally = (deck: readonly RoleId[], side: "BLUE" | "RED"): string => {
+  const counts = new Map<string, number>();
+  for (const id of deck) {
+    if (ROLES[id].side !== side) continue;
+    counts.set(ROLES[id].name, (counts.get(ROLES[id].name) ?? 0) + 1);
+  }
+  return [...counts].map(([name, n]) => (n > 1 ? `${name}×${n}` : name)).join("、");
+};
+
+/**
+ * 某个人数发什么牌。桌上问得最多的就是这个 ——
+ * 「9 人有没有莫德雷德」不该要退出规则页去房间设置里翻。
+ */
+const SetupRow = ({ count, deck }: { count: PlayerCount; deck: readonly RoleId[] }) => {
+  const blue = deck.filter((id) => ROLES[id].side === "BLUE").length;
+  return (
+    <div className="flex gap-2 border-t border-line py-1.5 first:border-t-0 first:pt-0">
+      <span className="w-9 shrink-0 pt-0.5 text-xs tabular-nums text-ink-mute">{count}人</span>
+      <div className="min-w-0 flex-1 space-y-0.5 text-xs leading-snug">
+        <p>
+          <span className="text-blue">蓝 {blue}</span>
+          <span className="text-ink-mute"> · {tally(deck, "BLUE")}</span>
+        </p>
+        <p>
+          <span className="text-red">红 {deck.length - blue}</span>
+          <span className="text-ink-mute"> · {tally(deck, "RED")}</span>
+        </p>
+      </div>
+    </div>
+  );
+};
 
 /** 角色卡：插画 + 名字 + 一句话 + 详细说明 */
 const RoleEntry = ({ id }: { id: RoleId }) => {
@@ -201,7 +236,25 @@ export const Rules = ({ onClose }: { onClose: () => void }) => {
 
             <Section title="几人局都有谁">
               <p className="text-ink-mute">
-                {MIN_PLAYERS}–{MAX_PLAYERS} 人。具体配置在房间设置里选好人数就能看到。
+                {MIN_PLAYERS}–{MAX_PLAYERS} 人。房主在房间设置里选人数，牌自动按下表发。
+              </p>
+
+              <p className="pt-1 text-xs text-ink">标准局</p>
+              <div className="rounded-xl bg-surface-2 px-3 py-2">
+                {COUNTS.map((n) => (
+                  <SetupRow key={n} count={n} deck={SETUP_STANDARD[n]} />
+                ))}
+              </div>
+
+              <p className="pt-1 text-xs text-ink">兰斯洛特模式（{LANCELOT_MIN_PLAYERS} 人起）</p>
+              <div className="rounded-xl bg-surface-2 px-3 py-2">
+                {COUNTS.filter((n) => SETUP_LANCELOT[n]).map((n) => (
+                  <SetupRow key={n} count={n} deck={SETUP_LANCELOT[n]!} />
+                ))}
+              </div>
+              <p className="text-ink-mute">
+                两边各一个兰斯洛特，顶掉标准局里的一个忠臣和刺客 ——
+                所以这个模式没有刺客，刺杀归莫甘娜。
               </p>
             </Section>
           </div>

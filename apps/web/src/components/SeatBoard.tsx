@@ -2,7 +2,7 @@
  * 座位区 —— 对局页的核心。
  *
  * 布局：**两列，靠左右两侧排布，中间留给阶段提示。**
- * 顺序固定为 1、2 / 3、4 / 5、6 …… 从左往右、从上往下，
+ * 顺序固定，**从上往下、从左往右** —— 左列排满再排右列（10 人局是左 1–5、右 6–10），
  * **不按「自己」旋转**。旋转过的圈每个人看到的位置都不一样，
  * 线下喊「左边第二个」时对不上；固定顺序则人人一致，
  * 号码在屏幕上的位置也不会因为换座而跳。自己那格单独标出来就够了。
@@ -47,11 +47,14 @@ export const SeatBoard = ({
   const rows = Math.max(Math.ceil(seats.length / 2), 1);
   const size = avatarSize(rows);
 
-  /** 偶数号靠左、奇数号靠右；行号就是 ⌊座位号 / 2⌋ */
-  const cell = (seat: number): React.CSSProperties => ({
-    gridColumn: seat % 2 === 0 ? 1 : 3,
-    gridRow: Math.floor(seat / 2) + 1,
-  });
+  /**
+   * **从上往下、从左往右**：左列先从上排到底，排满了再从右列顶上继续。
+   * 10 人局就是左列 1–5、右列 6–10。
+   */
+  const cell = (seat: number): React.CSSProperties =>
+    seat < rows
+      ? { gridColumn: 1, gridRow: seat + 1 }
+      : { gridColumn: 3, gridRow: seat - rows + 1 };
 
   return (
     <div className="flex min-h-0 w-full flex-1 items-stretch px-2 py-1">
