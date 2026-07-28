@@ -138,7 +138,10 @@ test("拍完整一局", async ({ browser }) => {
       await bystander.locator("button[data-seat]:not([disabled])").first().click();
       await shot(bystander, "献花砸蛋-选");
       await bystander.getByRole("button", { name: /砸蛋/ }).click();
-      await shot(host, "献花砸蛋-飞出来");
+      // 飞行 0.7s。shot 自己会先等 250ms，所以第二张只需再补 300ms 就落在砸中那一瞬
+      await shot(host, "献花砸蛋-飞在半路");
+      await host.waitForTimeout(300);
+      await shot(host, "献花砸蛋-砸中");
     }
 
     // 依次点座位直到凑够人数

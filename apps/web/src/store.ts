@@ -69,8 +69,8 @@ export interface FlyingReaction {
   readonly kind: Reaction;
 }
 
-/** 动画时长。和 styles.css 里的 reaction-fly 关键帧对齐 */
-const REACTION_MS = 1_200;
+/** 从飞出去到淡完的总时长。和 styles.css 里那组 toss-* 关键帧对齐 */
+const REACTION_MS = 1_000;
 
 /** 心跳间隔。线下发牌器的流量可以忽略不计，快一点让卡顿早点被看见 */
 const PING_INTERVAL_MS = 4_000;

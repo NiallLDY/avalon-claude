@@ -76,33 +76,96 @@
 }
 
 /**
- * 献花 / 砸蛋：从座位上方冒出来，边转边升，最后淡掉。
- * 时长和 store.ts 里的 REACTION_MS 对齐 —— 改一个另一个也要改。
+ * 献花 / 砸蛋：**从扔的人座位上真飞出去，划一道弧线砸到目标号码上。**
+ *
+ * 拆成三层嵌套，各管一件事 —— 一个元素上叠不出抛物线：
+ *   外层 toss-x    横向匀速位移到目标
+ *   中层 toss-y    纵向带一个抬高的峰值，和匀速横移合成弧线
+ *   内层 toss-spin 自转，落地后再淡出
+ *
+ * 位移量 --toss-dx/dy 由 SeatBoard 量出两个座位的实际距离后写进 style。
+ * 飞行 0.55s，砸中抖一下，0.97s 淡完，1s 整个删掉 ——
+ * 这个 1s 和 store.ts 里的 REACTION_MS 是一对，改一个另一个也要改。
  */
-@keyframes reaction-fly {
+@keyframes toss-x {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--toss-dx, 0px));
+  }
+}
+
+/*
+ * 抬高量 --toss-arc **跟着横向距离走**，不能写死。
+ * 写死一个大弧高的话，同一列之间那种几乎垂直的投掷会被抬得几乎不下落，
+ * 最后再一头砸下去 —— 看着是「悬停一下再掉」，不是扔。
+ */
+@keyframes toss-y {
   0% {
-    transform: translate(-50%, 0.5rem) scale(0.4) rotate(-25deg);
+    transform: translateY(0) scale(0.5);
     opacity: 0;
   }
-  18% {
-    transform: translate(-50%, -0.4rem) scale(1.35) rotate(8deg);
+  10% {
     opacity: 1;
   }
-  60% {
-    transform: translate(-50%, -1.9rem) scale(1.1) rotate(-6deg);
+  45% {
+    transform: translateY(calc(var(--toss-dy, 0px) * 0.42 - var(--toss-arc, 20px))) scale(1.25);
+  }
+  100% {
+    transform: translateY(var(--toss-dy, 0px)) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes toss-spin {
+  from {
+    rotate: 0deg;
+  }
+  to {
+    rotate: var(--toss-spin, 360deg);
+  }
+}
+
+@keyframes toss-fade {
+  to {
+    opacity: 0;
+  }
+}
+
+@utility toss-x {
+  animation: toss-x 0.55s linear forwards;
+}
+@utility toss-y {
+  animation: toss-y 0.55s linear forwards;
+}
+@utility toss-spin {
+  animation:
+    toss-spin 0.55s linear forwards,
+    toss-fade 0.25s ease-in 0.72s forwards;
+}
+
+/* 砸中那一下。延迟 = 飞行时长，正好接上 */
+@keyframes toss-hit {
+  0% {
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 0;
+  }
+  25% {
+    transform: translate(-50%, -50%) scale(1.5);
     opacity: 1;
   }
   100% {
-    transform: translate(-50%, -3.4rem) scale(0.85) rotate(10deg);
+    transform: translate(-50%, -50%) scale(2);
     opacity: 0;
   }
 }
 
-@utility reaction-fly {
-  animation: reaction-fly 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+@utility toss-hit {
+  animation: toss-hit 0.45s ease-out 0.52s both;
 }
 
-/* 挨了一下就抖一抖 —— 不然只有天上飘个鸡蛋，砸没砸到看不出来 */
+/* 挨了一下就抖一抖。**延迟 = 飞行时长** —— 要等东西真飞到了才抖，不然砸的是空气 */
 @keyframes reaction-shake {
   0%,
   100% {
@@ -123,7 +186,7 @@
 }
 
 @utility reaction-shake {
-  animation: reaction-shake 0.45s ease-in-out;
+  animation: reaction-shake 0.4s ease-in-out 0.55s;
 }
 
 /** 轻微质感噪点，避免纯扁平的廉价感 */

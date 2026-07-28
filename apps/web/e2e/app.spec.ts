@@ -371,12 +371,55 @@ test.describe("献花砸蛋", () => {
 
     // 挑一个不是自己的座位砸
     const target = thrower.locator("button[data-seat]:not([disabled])").first();
+    const targetSeat = (await target.getAttribute("data-seat"))!;
+    const targetBox = (await target.boundingBox())!;
+    const myBox = (await thrower
+      .locator("button[data-seat]")
+      .filter({ hasText: "你" })
+      .boundingBox())!;
+
     await target.click();
     await expect(thrower.getByRole("dialog").getByText("砸蛋")).toBeVisible();
     await thrower.getByRole("button", { name: /砸蛋/ }).click();
 
     // 蛋要飞到全桌每个人的屏幕上，不只是扔的人自己
-    for (const p of pages) await expect(p.getByText("🥚").first()).toBeVisible();
+    for (const p of pages) await expect(p.locator("[data-toss]")).toHaveCount(1);
+
+    /*
+     * **它得真的从我的位置飞到对方号码上**，不是在对方头顶冒个泡。
+     *
+     * 量的是最里层那个真正带着 emoji 走的元素 —— 外层 span 只负责横向位移，
+     * 它自己的 getBoundingClientRect **不包含被 transform 推走的子元素**，
+     * 量它会永远得到起点，看上去像是「动画没跑」。
+     */
+    const trace = await thrower.evaluate(async () => {
+      const emoji = () =>
+        (document.querySelector("[data-toss] > * > *") as HTMLElement | null)?.getBoundingClientRect();
+      const start = emoji();
+      await new Promise((r) => setTimeout(r, 600));
+      const end = emoji();
+      const hit = (
+        document.querySelector("[data-toss-hit]") as HTMLElement | null
+      )?.getBoundingClientRect();
+      return start && end && hit
+        ? { sy: start.top, ey: end.top, ex: end.left, hy: hit.top, hx: hit.left }
+        : null;
+    });
+    expect(trace).not.toBeNull();
+
+    const myCy = myBox.y + myBox.height / 2;
+    const targetCy = targetBox.y + targetBox.height / 2;
+    const targetCx = targetBox.x + targetBox.width / 2;
+
+    // 起点在我这儿
+    expect(Math.abs(trace!.sy - myCy)).toBeLessThan(60);
+    // 终点在对方那儿
+    expect(Math.abs(trace!.ey - targetCy)).toBeLessThan(50);
+    expect(Math.abs(trace!.ex - targetCx)).toBeLessThan(50);
+    // 砸中的爆点也钉在对方座位上
+    expect(Math.abs(trace!.hy - targetCy)).toBeLessThan(50);
+    expect(Math.abs(trace!.hx - targetCx)).toBeLessThan(50);
+    void targetSeat;
 
     for (const c of ctxs) await c.close();
   });

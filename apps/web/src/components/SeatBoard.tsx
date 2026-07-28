@@ -10,11 +10,26 @@
  * 座位角标承载全部实时信息：座位号、队长冠、上车勾、投票结果、女神令牌、掉线灰度。
  */
 
-import { ROLES, type ClientGameView, type PublicPlayer } from "@avalon/shared";
+import { useEffect, useRef, useState } from "react";
+import { ROLES, type ClientGameView, type PublicPlayer, type Reaction } from "@avalon/shared";
 import { Avatar } from "./Avatar.js";
 import { useStore } from "../store.js";
 
 const REACTION_EMOJI = { FLOWER: "🌹", EGG: "🥚" } as const;
+/** 落地那一下炸开的东西。花是撒开，蛋是砸烂 */
+const REACTION_HIT = { FLOWER: "✨", EGG: "💥" } as const;
+
+/** 一次飞行：起点（相对棋盘）+ 到目标的位移。像素，量出来的 */
+interface Flight {
+  readonly id: number;
+  readonly kind: Reaction;
+  readonly x: number;
+  readonly y: number;
+  readonly dx: number;
+  readonly dy: number;
+  readonly arc: number;
+  readonly spin: number;
+}
 
 interface Props {
   /** 按座次排好的座位，null 是空位 */
@@ -79,6 +94,58 @@ export const SeatBoard = ({
   const size = avatarSize(rows);
   const reactions = useStore((s) => s.reactions);
 
+  /*
+   * 花和蛋要**从扔的人座位飞到目标座位**，所以得知道两个座位在屏幕上的实际位置。
+   * 座位是 CSS grid 排的，位置算不出来只能量 —— 存一份座位号到 DOM 的映射，
+   * 收到 reaction 时量一次，把起点和位移交给 CSS 动画。
+   */
+  const boardRef = useRef<HTMLDivElement>(null);
+  const seatEls = useRef(new Map<number, HTMLElement>());
+  const [flights, setFlights] = useState<readonly Flight[]>([]);
+  const launched = useRef(new Set<number>());
+
+  useEffect(() => {
+    const board = boardRef.current;
+    if (!board) return;
+    const alive = new Set(reactions.map((r) => r.id));
+
+    const added: Flight[] = [];
+    for (const r of reactions) {
+      if (launched.current.has(r.id)) continue;
+      launched.current.add(r.id);
+      const from = seatEls.current.get(r.fromSeat);
+      const to = seatEls.current.get(r.targetSeat);
+      if (!from || !to) continue;
+
+      const b = board.getBoundingClientRect();
+      const f = from.getBoundingClientRect();
+      const t = to.getBoundingClientRect();
+      const x = f.left + f.width / 2 - b.left;
+      const y = f.top + f.height / 2 - b.top;
+      const dx = t.left + t.width / 2 - b.left - x;
+      const dy = t.top + t.height / 2 - b.top - y;
+      added.push({
+        id: r.id,
+        kind: r.kind,
+        x,
+        y,
+        dx,
+        dy,
+        // 弧高跟横向距离走：隔着屏幕扔要抛得高，同一列上下扔几乎是直线丢过去
+        arc: Math.min(80, 18 + Math.abs(dx) * 0.22),
+        // 往哪边转跟着飞的方向走，看着才像扔出去的
+        spin: dx >= 0 ? 540 : -540,
+      });
+    }
+
+    // store 那边到点会把 reaction 删掉，飞行跟着它一起收摊
+    for (const id of launched.current) if (!alive.has(id)) launched.current.delete(id);
+    setFlights((prev) => {
+      const kept = prev.filter((f) => alive.has(f.id));
+      return added.length > 0 ? [...kept, ...added] : kept.length === prev.length ? prev : kept;
+    });
+  }, [reactions]);
+
   /**
    * **从上往下、从左往右**：左列先从上排到底，排满了再从右列顶上继续。
    * 10 人局就是左列 1–5、右列 6–10。
@@ -91,7 +158,8 @@ export const SeatBoard = ({
   return (
     <div className="flex min-h-0 w-full flex-1 items-stretch px-2 py-1">
       <div
-        className="grid min-h-0 w-full flex-1 gap-x-1"
+        ref={boardRef}
+        className="relative grid min-h-0 w-full flex-1 gap-x-1"
         style={{
           gridTemplateColumns: "auto minmax(0, 1fr) auto",
           gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
@@ -158,6 +226,11 @@ export const SeatBoard = ({
               type="button"
               /* e2e 用它选座位按钮。别再用布局类当选择器 —— 换个排布就全断 */
               data-seat={seat}
+              ref={(el) => {
+                // 花和蛋要按真实距离飞，得留着这个位置
+                if (el) seatEls.current.set(seat, el);
+                else seatEls.current.delete(seat);
+              }}
               disabled={!canSelect && !canReact}
               onClick={() => (canSelect ? onSelect?.(seat) : onReact?.(seat))}
               style={cell(seat)}
@@ -176,19 +249,6 @@ export const SeatBoard = ({
                     ${hits.length > 0 ? "reaction-shake" : ""}`}
                 />
 
-                {/*
-                  飞出来的花和蛋。同时来好几个就横向岔开一点，免得叠成一坨。
-                  纯装饰，pointer-events-none，别挡住底下的按钮。
-                */}
-                {hits.map((r, i) => (
-                  <span
-                    key={r.id}
-                    className="reaction-fly pointer-events-none absolute -top-1 left-1/2 z-20 text-2xl drop-shadow"
-                    style={{ marginLeft: `${(i % 3) - 1}rem` }}
-                  >
-                    {REACTION_EMOJI[r.kind]}
-                  </span>
-                ))}
 
                 {isLeader ? (
                   <span className="absolute -top-2 -left-1.5 text-sm drop-shadow">👑</span>
@@ -283,6 +343,46 @@ export const SeatBoard = ({
             </button>
           );
         })}
+
+        {/*
+          飞行层。盖在座位之上、不吃点击。三层嵌套各管一个方向，
+          合起来是一条从扔的人到目标的抛物线（关键帧见 styles.css）。
+        */}
+        {flights.map((f) => (
+          <span
+            key={f.id}
+            aria-hidden
+            data-toss={f.kind}
+            className="toss-x pointer-events-none absolute z-30"
+            style={{
+              left: f.x,
+              top: f.y,
+              ["--toss-dx" as string]: `${f.dx}px`,
+              ["--toss-dy" as string]: `${f.dy}px`,
+              ["--toss-arc" as string]: `${f.arc}px`,
+              ["--toss-spin" as string]: `${f.spin}deg`,
+            }}
+          >
+            <span className="toss-y block">
+              <span className="toss-spin block -translate-x-1/2 -translate-y-1/2 text-3xl drop-shadow-lg">
+                {REACTION_EMOJI[f.kind]}
+              </span>
+            </span>
+          </span>
+        ))}
+
+        {/* 砸中的那一下，钉在目标座位上 */}
+        {flights.map((f) => (
+          <span
+            key={`hit-${f.id}`}
+            aria-hidden
+            data-toss-hit={f.kind}
+            className="toss-hit pointer-events-none absolute z-30 text-2xl"
+            style={{ left: f.x + f.dx, top: f.y + f.dy }}
+          >
+            {REACTION_HIT[f.kind]}
+          </span>
+        ))}
       </div>
     </div>
   );
