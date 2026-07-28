@@ -421,6 +421,43 @@ test.describe("献花砸蛋", () => {
     expect(Math.abs(trace!.hx - targetCx)).toBeLessThan(50);
     void targetSeat;
 
+    /*
+     * **献花不能长得跟砸蛋一样。**
+     * 之前两种共用一套落地动画、而且都会让对方头像抖一下 ——
+     * 被送花还抖，那是挨揍的语言。
+     *
+     * 三件事必须在**同一时刻**读出来。反应只在屏幕上活 1 秒，
+     * 拆成几条会轮询的断言挨个跑，轮到最后一条时它早没了，
+     * 于是「没有抖动」这种断言永远成立 —— 测了个寂寞。
+     */
+    const snapshot = async (page: typeof thrower) =>
+      page.evaluate(() => ({
+        flying: document.querySelector("[data-toss]")?.getAttribute("data-toss") ?? null,
+        hitKind: document.querySelector("[data-toss-hit]")?.getAttribute("data-toss-hit") ?? null,
+        hitClass: document.querySelector("[data-toss-hit]")?.className ?? null,
+        shaking: document.querySelectorAll(".reaction-shake").length,
+      }));
+
+    const eggShot = await snapshot(thrower);
+    expect(eggShot.hitKind).toBe("EGG");
+    expect(eggShot.hitClass).toContain("toss-hit");
+    expect(eggShot.shaking).toBe(1); // 挨了蛋要抖
+
+    await thrower.waitForTimeout(1200);
+    await expect(thrower.locator("[data-toss]")).toHaveCount(0);
+
+    await target.click();
+    await thrower.getByRole("button", { name: /献花/ }).click();
+
+    const flowerShot = await snapshot(thrower);
+    expect(flowerShot.flying).toBe("FLOWER");
+    expect(flowerShot.hitKind).toBe("FLOWER");
+    // 花是绽开往上飘，蛋才是炸开
+    expect(flowerShot.hitClass).toContain("toss-bloom");
+    expect(flowerShot.hitClass).not.toContain("toss-hit");
+    // 而且送花不该把人抖一下
+    expect(flowerShot.shaking).toBe(0);
+
     for (const c of ctxs) await c.close();
   });
 });

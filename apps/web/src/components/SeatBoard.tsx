@@ -17,7 +17,13 @@ import { useStore } from "../store.js";
 
 const REACTION_EMOJI = { FLOWER: "🌹", EGG: "🥚" } as const;
 /** 落地那一下炸开的东西。花是撒开，蛋是砸烂 */
-const REACTION_HIT = { FLOWER: "✨", EGG: "💥" } as const;
+/**
+ * 落地那一下。**花和蛋不能共用一套** ——
+ * 送花却让对方头像抖一下、再炸一朵星星，那是挨揍的语言，不是被送花的。
+ * 蛋是砸：炸开 + 抖。花是落：花瓣轻轻绽开往上飘，头像不动。
+ */
+const REACTION_HIT = { FLOWER: "🌸", EGG: "💥" } as const;
+const REACTION_HIT_ANIM = { FLOWER: "toss-bloom", EGG: "toss-hit" } as const;
 
 /** 一次飞行：起点（相对棋盘）+ 到目标的位移。像素，量出来的 */
 interface Flight {
@@ -182,7 +188,8 @@ export const SeatBoard = ({
           const act = actState(game, seat);
           // 选人优先：队长点头像是选队员，轮不到扔东西
           const canReact = !canSelect && reactable.includes(seat);
-          const hits = reactions.filter((r) => r.targetSeat === seat);
+          // 只有挨蛋才抖。被送花抖一下就成挨揍了
+          const hitByEgg = reactions.some((r) => r.targetSeat === seat && r.kind === "EGG");
           const revealed = game?.revealedVotes?.[seat];
           const isLady = game?.lady?.holderSeat === seat;
           const role = game?.reveal?.[seat];
@@ -246,7 +253,7 @@ export const SeatBoard = ({
                   size={size}
                   dim={!player.connected}
                   className={`${onTeam ? "ring-2 ring-gold" : isSelf ? "ring-2 ring-ink/70" : ""}
-                    ${hits.length > 0 ? "reaction-shake" : ""}`}
+                    ${hitByEgg ? "reaction-shake" : ""}`}
                 />
 
 
@@ -377,7 +384,7 @@ export const SeatBoard = ({
             key={`hit-${f.id}`}
             aria-hidden
             data-toss-hit={f.kind}
-            className="toss-hit pointer-events-none absolute z-30 text-2xl"
+            className={`${REACTION_HIT_ANIM[f.kind]} pointer-events-none absolute z-30 text-2xl`}
             style={{ left: f.x + f.dx, top: f.y + f.dy }}
           >
             {REACTION_HIT[f.kind]}

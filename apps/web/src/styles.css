@@ -165,6 +165,30 @@
   animation: toss-hit 0.45s ease-out 0.52s both;
 }
 
+/*
+ * 花落地：轻轻绽开，往上飘一点，散掉。**不炸、不抖。**
+ * 和砸蛋共用一套动画的话，献花看着就跟挨了一下一样。
+ */
+@keyframes toss-bloom {
+  0% {
+    transform: translate(-50%, -50%) scale(0.3) rotate(-20deg);
+    opacity: 0;
+  }
+  30% {
+    transform: translate(-50%, -65%) scale(1.15) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -150%) scale(0.9) rotate(15deg);
+    opacity: 0;
+  }
+}
+
+/* 0.52 + 0.45 = 0.97s，卡在 store 那边 1s 删掉之前刚好放完 */
+@utility toss-bloom {
+  animation: toss-bloom 0.45s ease-out 0.52s both;
+}
+
 /* 挨了一下就抖一抖。**延迟 = 飞行时长** —— 要等东西真飞到了才抖，不然砸的是空气 */
 @keyframes reaction-shake {
   0%,
