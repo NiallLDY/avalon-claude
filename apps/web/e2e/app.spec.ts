@@ -328,6 +328,60 @@ test.describe("退出房间", () => {
   });
 });
 
+test.describe("献花砸蛋", () => {
+  test("发言阶段点别人头像能扔，全桌都看得到", async ({ browser }) => {
+    test.setTimeout(90_000);
+    const ctxs = await Promise.all(
+      Array.from({ length: 5 }, () => browser.newContext({ locale: "zh-CN" })),
+    );
+    const pages = await Promise.all(ctxs.map((c) => c.newPage()));
+    for (const [i, p] of pages.entries()) await openApp(p, `玩家${i}`);
+
+    const host = pages[0]!;
+    const code = await createRoom(host, "砸蛋测试");
+    await sit(host, 0);
+    for (const [i, p] of pages.slice(1).entries()) {
+      await p.getByPlaceholder("房间码").fill(code);
+      await p.getByRole("button", { name: "进", exact: true }).click();
+      await expect(p.locator("p.font-display").first()).toHaveText(code);
+      await sit(p, i + 1);
+    }
+    for (const p of pages) await p.getByRole("button", { name: "准备" }).click();
+    await host.getByRole("button", { name: "开始游戏" }).click();
+    for (const p of pages) {
+      await p.getByRole("dialog").getByRole("button", { name: /点击查看身份/ }).click();
+      await p.keyboard.press("Escape");
+      await expect(p.getByRole("dialog")).toHaveCount(0);
+    }
+
+    await expect(host.getByText(/挑 \d+ 个人/)).toBeVisible();
+
+    // 找一个不是队长的人来扔 —— 队长点头像是选队员，不是扔东西
+    let thrower = host;
+    for (const p of pages) {
+      const picking = await p
+        .getByRole("button", { name: /选 \d+ 个人|^确认 \d/ })
+        .isVisible()
+        .catch(() => false);
+      if (!picking) {
+        thrower = p;
+        break;
+      }
+    }
+
+    // 挑一个不是自己的座位砸
+    const target = thrower.locator("button[data-seat]:not([disabled])").first();
+    await target.click();
+    await expect(thrower.getByRole("dialog").getByText("砸蛋")).toBeVisible();
+    await thrower.getByRole("button", { name: /砸蛋/ }).click();
+
+    // 蛋要飞到全桌每个人的屏幕上，不只是扔的人自己
+    for (const p of pages) await expect(p.getByText("🥚").first()).toBeVisible();
+
+    for (const c of ctxs) await c.close();
+  });
+});
+
 test.describe("个人中心", () => {
   test("进了房也能改昵称头像，改完桌上其他人立刻看到", async ({ browser }) => {
     const a = await browser.newContext({ locale: "zh-CN" });

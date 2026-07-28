@@ -7,6 +7,7 @@ import { DEFAULT_SETTINGS, type Avatar } from "@avalon/shared";
 import { config } from "./config.js";
 import {
   applyAction,
+  canReact,
   createRoom,
   isInGame,
   joinRoom,
@@ -399,6 +400,49 @@ describe("再来一局", () => {
     expect(r.game).toBeNull();
     // 回到等待页之后大家重新点一次
     expect(startBlockedReason(r)).toContain("没准备");
+  });
+});
+
+describe("献花砸蛋", () => {
+  /** 推到组队阶段：开局 → 全员看牌 */
+  const teamBuild = (): Room => {
+    const r = seated(5);
+    startGame(r, "p0", T0);
+    for (let i = 0; i < 5; i++) applyAction(r, `p${i}`, { type: "ACK_ROLE" }, T0);
+    return r;
+  };
+
+  it("组队阶段可以朝别人扔，座位号由服务端填", () => {
+    const r = teamBuild();
+    expect(r.game!.phase).toBe("TEAM_BUILD");
+    const res = canReact(r, "p3", 1);
+    expect(res).toMatchObject({ ok: true, value: 3 });
+  });
+
+  it("只在组队阶段开放 —— 投票和出牌时满屏鸡蛋会盖住要看的信息", () => {
+    const r = seated(5);
+    startGame(r, "p0", T0);
+    expect(r.game!.phase).toBe("ROLE_REVEAL");
+    expect(canReact(r, "p3", 1)).toMatchObject({ ok: false, error: "WRONG_PHASE" });
+  });
+
+  it("扔不到自己、空位和不存在的座位上", () => {
+    const r = teamBuild();
+    expect(canReact(r, "p3", 3)).toMatchObject({ ok: false, error: "INVALID_SEAT" });
+    expect(canReact(r, "p3", 9)).toMatchObject({ ok: false, error: "INVALID_SEAT" });
+  });
+
+  it("观战者不能扔", () => {
+    const r = teamBuild();
+    joinRoom(r, { id: "spec", token: "t", nick: "围观", avatar: AVATAR }, T0);
+    expect(canReact(r, "spec", 1)).toMatchObject({ ok: false, error: "NOT_SEATED" });
+  });
+
+  it("扔东西不碰任何对局状态", () => {
+    const r = teamBuild();
+    const before = JSON.stringify(r.game);
+    canReact(r, "p3", 1);
+    expect(JSON.stringify(r.game)).toBe(before);
   });
 });
 

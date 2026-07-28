@@ -20,6 +20,7 @@ import type { Store } from "./store.js";
 import {
   advanceAutomatically,
   applyAction,
+  canReact,
   isAutoAdvancePhase,
   isHost,
   phaseStamp,
@@ -58,6 +59,7 @@ type AppSocket = Socket & { data: SocketData };
 export const attachSocket = (io: IOServer, registry: Registry, store: Store): void => {
   const msgLimiter = createRateLimiter(config.msgPerWindow, config.msgWindowMs);
   const pingLimiter = createRateLimiter(config.pingPerWindow, config.pingWindowMs);
+  const reactLimiter = createRateLimiter(config.reactPerWindow, config.reactWindowMs);
   const socketsPerIp = createCounter();
 
   const now = (): number => Date.now();
@@ -415,6 +417,29 @@ export const attachSocket = (io: IOServer, registry: Registry, store: Store): vo
         void store.saveReport(room.id, { finishedAt: now(), game: stateFor(room, "").game });
         pushLobby();
       }
+    });
+
+    /*
+     * 献花 / 砸蛋。和心跳一样绕开 on()：这是拿来连点的东西，
+     * 走玩家的操作配额几下就把投票额度点没了。
+     * 超频、非法、不该扔的时候扔 —— 一律静默丢弃，弹错只会更吵。
+     */
+    listen("game:react", (raw: unknown) => {
+      if (!reactLimiter.hit(socket.id, now())) return;
+      const parsed = CLIENT_EVENTS["game:react"].safeParse(raw ?? {});
+      if (!parsed.success) return;
+      const room = socket.data.roomId ? registry.get(socket.data.roomId) : null;
+      if (!room) return;
+
+      const allowed = canReact(room, socket.data.playerId, parsed.data.targetSeat);
+      if (!allowed.ok) return;
+
+      // 里面全是公开信息（座位号 + 花还是蛋），不含身份，所以可以群发
+      io.to(`room:${room.id}`).emit("reaction", {
+        fromSeat: allowed.value,
+        targetSeat: parsed.data.targetSeat,
+        kind: parsed.data.kind,
+      });
     });
 
     socket.on("disconnect", () => {

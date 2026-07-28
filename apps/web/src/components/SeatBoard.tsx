@@ -12,6 +12,9 @@
 
 import { ROLES, type ClientGameView, type PublicPlayer } from "@avalon/shared";
 import { Avatar } from "./Avatar.js";
+import { useStore } from "../store.js";
+
+const REACTION_EMOJI = { FLOWER: "🌹", EGG: "🥚" } as const;
 
 interface Props {
   /** 按座次排好的座位，null 是空位 */
@@ -25,6 +28,13 @@ interface Props {
   readonly selfSeat?: number | null;
   /** 空位是否可点（等待页选座用） */
   readonly emptySelectable?: boolean;
+  /**
+   * 可以朝他扔东西的座位。**跟 selectable 互斥**：
+   * 队长在组队阶段点头像是选人，非队长点才是扔东西 ——
+   * 同一个手势不能有两个意思。
+   */
+  readonly reactable?: readonly number[];
+  readonly onReact?: (seat: number) => void;
   /** 两列中间的内容 */
   readonly children?: React.ReactNode;
 }
@@ -61,10 +71,13 @@ export const SeatBoard = ({
   onSelect,
   selfSeat = null,
   emptySelectable = false,
+  reactable = [],
+  onReact,
   children,
 }: Props) => {
   const rows = Math.max(Math.ceil(seats.length / 2), 1);
   const size = avatarSize(rows);
+  const reactions = useStore((s) => s.reactions);
 
   /**
    * **从上往下、从左往右**：左列先从上排到底，排满了再从右列顶上继续。
@@ -99,6 +112,9 @@ export const SeatBoard = ({
           const isLeader = game?.leaderSeat === seat;
           const onTeam = game?.team?.includes(seat) ?? false;
           const act = actState(game, seat);
+          // 选人优先：队长点头像是选队员，轮不到扔东西
+          const canReact = !canSelect && reactable.includes(seat);
+          const hits = reactions.filter((r) => r.targetSeat === seat);
           const revealed = game?.revealedVotes?.[seat];
           const isLady = game?.lady?.holderSeat === seat;
           const role = game?.reveal?.[seat];
@@ -142,12 +158,12 @@ export const SeatBoard = ({
               type="button"
               /* e2e 用它选座位按钮。别再用布局类当选择器 —— 换个排布就全断 */
               data-seat={seat}
-              disabled={!canSelect}
-              onClick={() => onSelect?.(seat)}
+              disabled={!canSelect && !canReact}
+              onClick={() => (canSelect ? onSelect?.(seat) : onReact?.(seat))}
               style={cell(seat)}
               className={`flex min-h-0 w-[5rem] flex-col items-center justify-center gap-0.5
                 self-center rounded-xl p-1 transition
-                ${canSelect ? "active:scale-95" : "pointer-events-none"}
+                ${canSelect || canReact ? "active:scale-95" : "pointer-events-none"}
                 ${isSelected ? "bg-gold/15 ring-2 ring-gold" : ""}
                 ${isSelf && !isSelected ? "bg-ink/10 ring-1 ring-ink/40" : ""}`}
             >
@@ -156,8 +172,23 @@ export const SeatBoard = ({
                   avatar={player.avatar}
                   size={size}
                   dim={!player.connected}
-                  className={onTeam ? "ring-2 ring-gold" : isSelf ? "ring-2 ring-ink/70" : ""}
+                  className={`${onTeam ? "ring-2 ring-gold" : isSelf ? "ring-2 ring-ink/70" : ""}
+                    ${hits.length > 0 ? "reaction-shake" : ""}`}
                 />
+
+                {/*
+                  飞出来的花和蛋。同时来好几个就横向岔开一点，免得叠成一坨。
+                  纯装饰，pointer-events-none，别挡住底下的按钮。
+                */}
+                {hits.map((r, i) => (
+                  <span
+                    key={r.id}
+                    className="reaction-fly pointer-events-none absolute -top-1 left-1/2 z-20 text-2xl drop-shadow"
+                    style={{ marginLeft: `${(i % 3) - 1}rem` }}
+                  >
+                    {REACTION_EMOJI[r.kind]}
+                  </span>
+                ))}
 
                 {isLeader ? (
                   <span className="absolute -top-2 -left-1.5 text-sm drop-shadow">👑</span>

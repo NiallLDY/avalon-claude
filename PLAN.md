@@ -163,6 +163,7 @@ function projectFor(game: Game, viewer: PlayerId | null): ClientGameView
 | `game:start` | `{}` | 仅房主 |
 | `game:restart` | `{}` | **任何在座玩家**；终局后把房间退回等待页（保留座位与设置，清空准备），不直接发牌。终局画面在各自客户端本地留一份，谁点掉谁走 |
 | `game:action` | `{ action: ClientAction }` | 全部对局动作走这一个通道 |
+| `game:react` | `{ targetSeat, kind }` | 献花 / 砸蛋。**仅组队阶段**，扔的人座位号由服务端填。**独立限流**，不占操作配额 |
 | `net:ping` | `{ t }` | 测延迟；`t` 是客户端时间戳，服务端原样回声。**独立限流**，不占操作配额 |
 
 `ClientAction` 是 `ACK_ROLE` / `PROPOSE_TEAM` / `VOTE` / `PLAY_CARD` / `LADY_CHECK` /
@@ -181,13 +182,15 @@ function projectFor(game: Game, viewer: PlayerId | null): ClientGameView
 | `error` | `{ code, message }` |
 | `room:list` | 大厅房间列表 |
 | `kicked` | `{ reason }`，被踢或房间解散 |
+| `reaction` | `{ fromSeat, targetSeat, kind }`，谁朝谁扔了什么。**允许群发** —— 全是公开信息，不含身份 |
 | `net:pong` | `{ t }`，`net:ping` 的回声。RTT 只在客户端一侧算，两端时钟不用对齐 |
 
 > 设计取向：**服务端每次变更下发全量裁剪视图**，不做增量 diff。状态才几 KB，简单胜过优化，且天然解决重连一致性。
 >
 > **推送必须逐人单播。** `io.to(room).emit("state", …)` 在这个项目里是禁用写法 ——
 > 它会把同一份 payload 发给房间里所有人，等于把身份全发出去。
-> 只有 `event`（播动画音效用的一次性提示，不含机密）才允许群发。
+> 只有 `event`（播动画音效用的一次性提示，不含机密）和 `reaction`（献花砸蛋，
+> 只有座位号和花/蛋）才允许群发 —— 判据是「这份 payload 对房间里每个人都该长一样吗」。
 
 ---
 

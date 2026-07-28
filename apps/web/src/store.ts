@@ -11,6 +11,7 @@ import type {
   GameEvent,
   GameSettings,
   Profile,
+  Reaction,
   RoomSummary,
   StatePayload,
 } from "@avalon/shared";
@@ -60,6 +61,17 @@ interface Toast {
  */
 export type ConnStatus = "connecting" | "connected" | "reconnecting";
 
+/** 飞在屏幕上的一朵花 / 一颗蛋。动画放完就删掉 */
+export interface FlyingReaction {
+  readonly id: number;
+  readonly fromSeat: number;
+  readonly targetSeat: number;
+  readonly kind: Reaction;
+}
+
+/** 动画时长。和 styles.css 里的 reaction-fly 关键帧对齐 */
+const REACTION_MS = 1_200;
+
 /** 心跳间隔。线下发牌器的流量可以忽略不计，快一点让卡顿早点被看见 */
 const PING_INTERVAL_MS = 4_000;
 
@@ -87,6 +99,8 @@ interface AppState {
   /** 规则页开着没。任何页面都能开，所以放全局 */
   rulesOpen: boolean;
   lastEvent: GameEvent | null;
+  /** 正在飞的花和蛋 */
+  reactions: readonly FlyingReaction[];
   /** 当前盖在屏幕上的结果卡，玩家点掉为止 */
   result: ResultCard | null;
   toasts: readonly Toast[];
@@ -105,6 +119,7 @@ interface AppState {
   refreshRooms: (query?: string) => Promise<void>;
   emit: (event: string, payload?: unknown) => void;
   act: (action: ClientAction) => void;
+  react: (targetSeat: number, kind: Reaction) => void;
   setSettings: (settings: GameSettings) => void;
   toast: (text: string, tone?: Toast["tone"]) => void;
   dismissToast: (id: number) => void;
@@ -116,6 +131,7 @@ interface AppState {
 const identity = loadIdentity();
 let toastSeq = 0;
 let resultSeq = 0;
+let reactionSeq = 0;
 
 /** 错误码 → 给人看的话。服务端回的是机器码，别直接甩给用户 */
 const ERROR_TEXT: Record<string, string> = {
@@ -156,6 +172,7 @@ export const useStore = create<AppState>((set, get) => ({
   needsOnboarding: !hasProfile(),
   rulesOpen: false,
   lastEvent: null,
+  reactions: [],
   result: null,
   toasts: [],
 
@@ -215,6 +232,15 @@ export const useStore = create<AppState>((set, get) => ({
     });
 
     socket.on("room:list", ({ rooms }: { rooms: RoomSummary[] }) => set({ rooms }));
+
+    socket.on("reaction", (r: Omit<FlyingReaction, "id">) => {
+      const id = ++reactionSeq;
+      set((s) => ({ reactions: [...s.reactions, { ...r, id }] }));
+      setTimeout(
+        () => set((s) => ({ reactions: s.reactions.filter((x) => x.id !== id) })),
+        REACTION_MS,
+      );
+    });
 
     socket.on("event", (event: GameEvent) => {
       set({ lastEvent: event });
@@ -330,6 +356,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   emit: (event, payload) => get().socket?.emit(event, payload ?? {}),
   act: (action) => get().socket?.emit("game:action", { action }),
+  react: (targetSeat, kind) => get().socket?.emit("game:react", { targetSeat, kind }),
   setSettings: (settings) => get().socket?.emit("room:settings", { settings }),
 
   toast: (text, tone = "info") => {

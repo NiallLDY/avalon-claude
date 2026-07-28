@@ -41,6 +41,12 @@ export const config = {
    */
   pingPerWindow: num("PING_PER_WINDOW", 6),
   pingWindowMs: num("PING_WINDOW_MS", 10_000),
+  /**
+   * 献花砸蛋也单独限流。它天生就是拿来连点的，
+   * 走操作配额的话几下就把自己的投票额度点没了。
+   */
+  reactPerWindow: num("REACT_PER_WINDOW", 8),
+  reactWindowMs: num("REACT_WINDOW_MS", 10_000),
   maxPayloadBytes: num("MAX_PAYLOAD_BYTES", 4096),
 
   // ── 生命周期 ──

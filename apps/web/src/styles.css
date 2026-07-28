@@ -75,6 +75,57 @@
   padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
 }
 
+/**
+ * 献花 / 砸蛋：从座位上方冒出来，边转边升，最后淡掉。
+ * 时长和 store.ts 里的 REACTION_MS 对齐 —— 改一个另一个也要改。
+ */
+@keyframes reaction-fly {
+  0% {
+    transform: translate(-50%, 0.5rem) scale(0.4) rotate(-25deg);
+    opacity: 0;
+  }
+  18% {
+    transform: translate(-50%, -0.4rem) scale(1.35) rotate(8deg);
+    opacity: 1;
+  }
+  60% {
+    transform: translate(-50%, -1.9rem) scale(1.1) rotate(-6deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -3.4rem) scale(0.85) rotate(10deg);
+    opacity: 0;
+  }
+}
+
+@utility reaction-fly {
+  animation: reaction-fly 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* 挨了一下就抖一抖 —— 不然只有天上飘个鸡蛋，砸没砸到看不出来 */
+@keyframes reaction-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-3px) rotate(-3deg);
+  }
+  40% {
+    transform: translateX(3px) rotate(3deg);
+  }
+  60% {
+    transform: translateX(-2px) rotate(-2deg);
+  }
+  80% {
+    transform: translateX(2px) rotate(1deg);
+  }
+}
+
+@utility reaction-shake {
+  animation: reaction-shake 0.45s ease-in-out;
+}
+
 /** 轻微质感噪点，避免纯扁平的廉价感 */
 @utility grain {
   position: relative;

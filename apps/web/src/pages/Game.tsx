@@ -160,10 +160,12 @@ const PHASE_HINT: Record<string, string> = {
 };
 
 export const Game = () => {
-  const { state, act, leaveRoom } = useStore();
+  const { state, act, react, leaveRoom } = useStore();
   const [picked, setPicked] = useState<number[]>([]);
   const [sheet, setSheet] = useState<"role" | "report" | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  /** 正要朝谁扔东西。null = 没在扔 */
+  const [reactTarget, setReactTarget] = useState<number | null>(null);
 
   const game = state?.game ?? null;
   const phase = game?.phase;
@@ -215,6 +217,16 @@ export const Game = () => {
   /** 等人的三个阶段由 ActingStatus 接管 —— 它还要摊开号码 */
   const acting = phase === "ROLE_REVEAL" || phase === "VOTE" || phase === "MISSION";
 
+  /*
+   * 能朝谁扔花扔蛋。只在组队阶段 —— 那是线下真正在发言互喷的时候，
+   * 别的阶段满屏鸡蛋只会盖住要看的东西。自己不扔自己，队长在选人也不扔
+   * （selectable 非空时 SeatBoard 让选人优先，这里就整个关掉）。
+   */
+  const reactable: number[] =
+    phase === "TEAM_BUILD" && me && selectable.length === 0
+      ? room.seats.flatMap((p, i) => (p && i !== me.seat ? [i] : []))
+      : [];
+
   /** 中心提示：结果类阶段的一行大字 */
   const waitingText = (): string | null => {
     if (phase === "VOTE_RESULT") {
@@ -251,6 +263,8 @@ export const Game = () => {
         selected={picked}
         onSelect={toggle}
         selfSeat={me?.seat ?? null}
+        reactable={reactable}
+        onReact={setReactTarget}
       >
         {acting ? (
           <ActingStatus game={game} />
@@ -349,6 +363,39 @@ export const Game = () => {
       </Sheet>
       <Sheet open={sheet === "report"} onOpenChange={(o) => setSheet(o ? "report" : null)} title="战报">
         <Report game={game} seated={room.seats} />
+      </Sheet>
+
+      {/*
+        献花 / 砸蛋。发言阶段点别人头像弹出来 ——
+        扔完立刻关掉，两下点完，别打断发言。
+      */}
+      <Sheet
+        open={reactTarget !== null}
+        onOpenChange={(o) => !o && setReactTarget(null)}
+        title={reactTarget === null ? "" : `丢给 ${labeler(room.seats).full(reactTarget)}`}
+      >
+        <div className="flex gap-3 pb-2">
+          {(
+            [
+              ["FLOWER", "🌹", "献花"],
+              ["EGG", "🥚", "砸蛋"],
+            ] as const
+          ).map(([kind, emoji, label]) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => {
+                if (reactTarget !== null) react(reactTarget, kind);
+                setReactTarget(null);
+              }}
+              className="flex flex-1 flex-col items-center gap-1 rounded-2xl bg-surface-2 py-5
+                text-ink active:scale-95"
+            >
+              <span className="text-4xl">{emoji}</span>
+              <span className="text-sm">{label}</span>
+            </button>
+          ))}
+        </div>
       </Sheet>
 
       {/* 对局中退出座位是保留的 —— 得说清楚怎么回来，不然人会以为把牌局搞砸了 */}

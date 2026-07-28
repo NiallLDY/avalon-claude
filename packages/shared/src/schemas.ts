@@ -12,6 +12,7 @@ import type { GameSettings } from "./game.js";
 import {
   CLIENT_EVENT_NAMES,
   NICK_MAX,
+  REACTIONS,
   ROOM_CODE_PATTERN,
   ROOM_NAME_MAX,
   sanitizeText,
@@ -118,6 +119,8 @@ export const CLIENT_EVENTS = {
   /** 再来一局 = 退回等待页。任何在座玩家都能发，没有参数 */
   "game:restart": z.object({}),
   "game:action": z.object({ action: clientActionSchema }),
+  /** 献花 / 砸蛋。座位号由服务端按连接身份填，客户端只说扔给谁 */
+  "game:react": z.object({ targetSeat: seatSchema, kind: z.enum(REACTIONS) }),
   /**
    * 延迟心跳。`t` 是客户端自己的时间戳，服务端只负责原样回声 ——
    * 两端时钟不用对齐，因为差值只在客户端这一侧算。

@@ -114,6 +114,8 @@ test("拍完整一局", async ({ browser }) => {
     if (await skip.isVisible().catch(() => false)) await skip.click();
   };
 
+  let thrown = false;
+
   /** 打一轮：提名 → 全票通过 → 出牌 */
   const playRound = async (failIt: boolean) => {
     // **先等阶段真的到了组队**，再找队长。
@@ -128,6 +130,16 @@ test("拍完整一局", async ({ browser }) => {
       }
     }
     await shot(leader, failIt ? "组队" : "组队-2");
+
+    // 发言阶段互扔一次，拍下动画。只拍第一轮，别每轮都来
+    if (!thrown) {
+      thrown = true;
+      const bystander = pages.find((p) => p !== leader)!;
+      await bystander.locator("button[data-seat]:not([disabled])").first().click();
+      await shot(bystander, "献花砸蛋-选");
+      await bystander.getByRole("button", { name: /砸蛋/ }).click();
+      await shot(host, "献花砸蛋-飞出来");
+    }
 
     // 依次点座位直到凑够人数
     const need = Number((await leader.getByText(/挑 \d+ 个人/).textContent())!.match(/\d+/)![0]);

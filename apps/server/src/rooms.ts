@@ -625,6 +625,30 @@ export const reopenRoom = (room: Room, actorId: string, now: number): RoomResult
 };
 
 /**
+ * 献花 / 砸蛋能不能扔。返回扔的人坐几号。
+ *
+ * **只在组队阶段开放** —— 那是线下真正在发言互喷的时候。
+ * 别的阶段大家在投票、出牌、看结果，满屏鸡蛋只会盖住要看的信息。
+ * 这东西不进任何状态、不写战报、不影响一丁点判定，纯气氛。
+ */
+export const canReact = (
+  room: Room,
+  actorId: string,
+  targetSeat: number,
+): RoomResult<number> => {
+  if (room.game === null) return err("NOT_IN_GAME");
+  if (room.game.phase !== "TEAM_BUILD") return err("WRONG_PHASE");
+
+  const fromSeat = seatOf(room, actorId);
+  if (fromSeat < 0) return err("NOT_SEATED");
+  if (targetSeat === fromSeat) return err("INVALID_SEAT");
+  if (targetSeat < 0 || targetSeat >= room.seatCount) return err("INVALID_SEAT");
+  if (room.seats[targetSeat] === null) return err("INVALID_SEAT");
+
+  return ok(fromSeat);
+};
+
+/**
  * 只是给人看结果的过渡阶段。这些没有任何人要做决定，
  * 服务端等一小会儿自动往下走 —— 让全场卡在等房主点一下是很糟的体验。
  */

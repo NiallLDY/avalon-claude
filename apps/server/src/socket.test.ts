@@ -384,6 +384,44 @@ describe("一整局", () => {
   }, 20_000);
 });
 
+describe("献花砸蛋", () => {
+  it("扔出去全房间都收得到，扔的人是几号由服务端填", async () => {
+    const { members } = await setupRoom(5);
+    members[0]!.socket.emit("game:start", {});
+    await waitFor(members, (c) => c.state?.game !== null, "开局");
+    for (const c of members) act(c, { type: "ACK_ROLE" });
+    await waitFor(members, (c) => c.state?.game?.phase === "TEAM_BUILD", "进组队阶段");
+
+    const seen = members.map(() => [] as unknown[]);
+    for (const [i, c] of members.entries()) {
+      c.socket.on("reaction", (r: unknown) => seen[i]!.push(r));
+    }
+
+    // 客户端 payload 里没有 fromSeat —— 自报座位号就等于让人冒名顶替
+    members[3]!.socket.emit("game:react", { targetSeat: 1, kind: "EGG" });
+    await new Promise((r) => setTimeout(r, 150));
+
+    for (const got of seen) {
+      expect(got).toEqual([{ fromSeat: 3, targetSeat: 1, kind: "EGG" }]);
+    }
+    // 纯气氛，不该动到对局状态
+    for (const c of members) expect(c.state!.game!.phase).toBe("TEAM_BUILD");
+  }, 15_000);
+
+  it("阶段不对就静默丢弃，不弹错误", async () => {
+    const { members } = await setupRoom(5);
+    members[0]!.socket.emit("game:start", {});
+    await waitFor(members, (c) => c.state?.game !== null, "开局");
+    for (const c of members) c.errors.length = 0;
+
+    // 还在发牌阶段
+    members[3]!.socket.emit("game:react", { targetSeat: 1, kind: "FLOWER" });
+    await new Promise((r) => setTimeout(r, 150));
+
+    for (const c of members) expect(c.errors).toEqual([]);
+  }, 15_000);
+});
+
 describe("观战者", () => {
   it("观战者拿不到任何身份，连自己的 me 都是 null", async () => {
     const { roomId, members } = await setupRoom(5);

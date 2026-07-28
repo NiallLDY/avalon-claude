@@ -96,9 +96,15 @@ export const CLIENT_EVENT_NAMES = [
   "game:start",
   "game:restart",
   "game:action",
+  /** 献花 / 砸鸡蛋。纯玩梗，不影响任何规则 */
+  "game:react",
   /** 测延迟用的心跳。服务端原样回 net:pong，往返差就是 RTT */
   "net:ping",
 ] as const;
+
+/** 能扔给别人的东西。**只是气氛，不进战报、不影响任何判定** */
+export const REACTIONS = ["FLOWER", "EGG"] as const;
+export type Reaction = (typeof REACTIONS)[number];
 
 export type ClientEventName = (typeof CLIENT_EVENT_NAMES)[number];
 
@@ -192,4 +198,13 @@ export interface ServerEvents {
   kicked: (payload: { reason: string }) => void;
   /** `net:ping` 的回声，`t` 是客户端发出时自己的时间戳 */
   "net:pong": (payload: { t: number }) => void;
+  /**
+   * 谁朝谁扔了什么。**全房间群发** —— 里面全是公开信息（座位号 + 花还是蛋），
+   * 不含任何身份，所以不需要逐人裁剪。
+   */
+  reaction: (payload: {
+    fromSeat: number;
+    targetSeat: number;
+    kind: Reaction;
+  }) => void;
 }
