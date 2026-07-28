@@ -224,6 +224,42 @@ describe("房间", () => {
   });
 });
 
+describe("延迟心跳", () => {
+  it("net:ping 原样回声，客户端据此算 RTT", async () => {
+    const c = await connectClient("solo");
+    const sent = Date.now();
+    c.socket.emit("net:ping", { t: sent });
+
+    const echoed = await new Promise<number>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("等 net:pong 超时")), 3000);
+      c.socket.once("net:pong", ({ t }: { t: number }) => {
+        clearTimeout(timer);
+        resolve(t);
+      });
+    });
+    expect(echoed).toBe(sent);
+  });
+
+  it("心跳不占玩家的操作配额", async () => {
+    const { members } = await setupRoom(5);
+    const host = members[0]!;
+    // 打满一整个心跳窗口的量。要是心跳和操作共用一份限流，
+    // 后面这次 game:start 就该被 RATE_LIMITED 挡掉。
+    for (let i = 0; i < 40; i++) host.socket.emit("net:ping", { t: Date.now() });
+
+    host.socket.emit("game:start", {});
+    await waitFor([host], (c) => c.state?.game !== null, "开局");
+    expect(host.errors).toEqual([]);
+  });
+
+  it("超频的心跳被静默丢弃，不弹错误", async () => {
+    const c = await connectClient("flood");
+    for (let i = 0; i < 30; i++) c.socket.emit("net:ping", { t: Date.now() });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(c.errors).toEqual([]);
+  });
+});
+
 describe("一整局", () => {
   it("五个人能从发牌打到刺杀，且全程没人看到别人的身份", async () => {
     const { members } = await setupRoom(5);

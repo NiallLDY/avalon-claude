@@ -1,7 +1,7 @@
 /**
  * 对局主界面。**竖屏单屏，不滚动**（CLAUDE.md 铁律 4）。
  *
- * 结构固定为四层：顶部进度条 / 环形座位 / 阶段提示 / 操作区。
+ * 结构固定为四层：顶部进度条 / 两列座位 / 阶段提示 / 操作区。
  * 只有操作区随阶段变化，其余三层始终占据同样的高度 —— 这样切阶段时画面不会跳。
  * 放不下的东西一律进 Sheet。
  */
@@ -9,9 +9,9 @@
 import { useEffect, useState } from "react";
 import { ROLES, TEAM_SIZE, isProtectedRound, type ClientGameView } from "@avalon/shared";
 import { PlayerChips } from "../components/PlayerChip.js";
-import { SeatRing } from "../components/SeatRing.js";
+import { SeatBoard } from "../components/SeatBoard.js";
 import { RoleCard } from "../components/RoleCard.js";
-import { Button, Sheet } from "../components/ui.js";
+import { Button, Latency, Sheet } from "../components/ui.js";
 import { Report } from "./Report.js";
 import { labeler, seatNo } from "../lib/labels.js";
 import { selfId, useStore } from "../store.js";
@@ -20,15 +20,17 @@ import { selfId, useStore } from "../store.js";
 const Progress = ({ game }: { game: ClientGameView }) => {
   const sizes = TEAM_SIZE[game.playerCount as 5] ?? [];
   return (
-    <div className="flex items-center justify-between gap-3 px-4 py-2">
-      <div className="flex gap-1.5">
+    // 三组东西挤一行，每组都得 shrink-0 —— 否则「流局」会被压成竖排、
+    // 「你是1号」会换行，顶栏一高就把座位区挤下去了
+    <div className="flex items-center justify-between gap-2 px-3 py-2">
+      <div className="flex shrink-0 gap-1">
         {sizes.map((size, round) => {
           const done = game.missions[round];
           const current = round === game.roundIndex && !done;
           return (
             <span
               key={round}
-              className={`relative flex h-7 w-7 items-center justify-center rounded-full text-[0.7rem]
+              className={`relative flex h-6 w-6 items-center justify-center rounded-full text-[0.7rem]
                 ${done ? (done.success ? "bg-blue text-white" : "bg-red text-white") : ""}
                 ${current ? "ring-2 ring-gold text-gold" : ""}
                 ${!done && !current ? "bg-surface-2 text-ink-mute" : ""}`}
@@ -42,9 +44,12 @@ const Progress = ({ game }: { game: ClientGameView }) => {
         })}
       </div>
 
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1">
-          <span className="text-[0.65rem] text-ink-mute">流局</span>
+      {/* 对局页没有房间名，顶栏正中就是这里 */}
+      <Latency />
+
+      <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="shrink-0 text-[0.65rem] whitespace-nowrap text-ink-mute">流局</span>
           {[0, 1, 2, 3, 4].map((i) => (
             <span
               key={i}
@@ -57,14 +62,14 @@ const Progress = ({ game }: { game: ClientGameView }) => {
 
         {/* 我是几号 —— 常驻，投票和讨论全程都要用 */}
         {game.me ? (
-          <span className="flex items-center gap-1 rounded-md bg-ink px-1.5 py-0.5 text-ground">
+          <span className="flex shrink-0 items-center gap-1 rounded-md bg-ink px-1.5 py-0.5 whitespace-nowrap text-ground">
             <span className="text-[0.6rem] leading-none opacity-70">你是</span>
             <span className="text-[0.8rem] font-bold leading-none tabular-nums">
               {game.me.seat + 1}号
             </span>
           </span>
         ) : (
-          <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[0.65rem] text-ink-mute">
+          <span className="shrink-0 rounded-md bg-surface-2 px-1.5 py-0.5 text-[0.65rem] whitespace-nowrap text-ink-mute">
             观战
           </span>
         )}
@@ -164,7 +169,7 @@ export const Game = () => {
         <Progress game={game} />
       </div>
 
-      <SeatRing
+      <SeatBoard
         seats={room.seats}
         game={game}
         selectable={selectable}
@@ -185,7 +190,7 @@ export const Game = () => {
             {waitingText()}
           </p>
         ) : null}
-      </SeatRing>
+      </SeatBoard>
 
       {/*
         阶段条。**车队必须在这里明明白白列出来** ——

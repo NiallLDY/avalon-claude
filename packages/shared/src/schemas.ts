@@ -117,6 +117,11 @@ export const CLIENT_EVENTS = {
   "game:start": z.object({}),
   "game:restart": z.object({ rotateFirstLeader: z.boolean().optional() }),
   "game:action": z.object({ action: clientActionSchema }),
+  /**
+   * 延迟心跳。`t` 是客户端自己的时间戳，服务端只负责原样回声 ——
+   * 两端时钟不用对齐，因为差值只在客户端这一侧算。
+   */
+  "net:ping": z.object({ t: z.number() }),
 } satisfies Record<ClientEventName, z.ZodTypeAny>;
 
 export type ClientPayload<E extends ClientEventName> = z.infer<(typeof CLIENT_EVENTS)[E]>;

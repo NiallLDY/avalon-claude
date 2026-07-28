@@ -59,9 +59,14 @@ interface Toast {
  */
 export type ConnStatus = "connecting" | "connected" | "reconnecting";
 
+/** 心跳间隔。线下发牌器的流量可以忽略不计，快一点让卡顿早点被看见 */
+const PING_INTERVAL_MS = 4_000;
+
 interface AppState {
   socket: Socket | null;
   conn: ConnStatus;
+  /** 最近一次往返延迟（毫秒）。null = 还没量到，或当前断着 */
+  rtt: number | null;
   profile: Profile;
   rooms: readonly RoomSummary[];
   state: StatePayload | null;
@@ -130,6 +135,7 @@ const ERROR_TEXT: Record<string, string> = {
 export const useStore = create<AppState>((set, get) => ({
   socket: null,
   conn: "connecting",
+  rtt: null,
   profile: loadProfile(),
   rooms: [],
   state: null,
@@ -152,19 +158,39 @@ export const useStore = create<AppState>((set, get) => ({
       reconnectionDelayMax: 4_000,
     });
 
-    socket.on("connect", () => {
-      set({ conn: "connected" });
-      // 刷新或断线重连后自动回到原房间。
-      // 服务端凭 playerId 认人，座位和房主身份都还在，这里只要把「我在哪个房间」补回去。
-      const roomId = loadLastRoom();
-      if (roomId && !get().state) {
-        socket.emit("room:join", { roomId });
-      } else {
-        set({ restoring: false });
-      }
+    // 心跳：发出去的是自己的时间戳，服务端原样回声，差值就是 RTT。
+    // 只在真连着的时候发 —— 断线期间 socket.io 会把 emit 排队缓存，
+    // 等重连上一次性冲出去，那批回声算出来的「延迟」是掉线时长，不是网络延迟。
+    const ping = (): void => {
+      if (socket.connected) socket.emit("net:ping", { t: Date.now() });
+    };
+    const pingTimer = setInterval(ping, PING_INTERVAL_MS);
+    window.addEventListener("beforeunload", () => clearInterval(pingTimer));
+
+    socket.on("net:pong", ({ t }: { t: number }) => {
+      set({ rtt: Math.max(0, Date.now() - t) });
     });
 
-    socket.on("disconnect", () => set({ conn: "reconnecting" }));
+    socket.on("connect", () => {
+      set({ conn: "connected" });
+      ping(); // 别让用户等满一个心跳周期才看到数字
+
+      // 刷新或断线重连后自动回到原房间。
+      // 服务端凭 playerId 认人，座位和房主身份都还在，这里只要把「我在哪个房间」补回去。
+      //
+      // **每次连上都要发，不能因为 state 还在就跳过。**
+      // 断线重连建的是一条全新的连接，服务端那边 socket.data.roomId 是空的；
+      // 只有刷新才会让 state 变 null。所以「state 还在」恰恰是重连的情形 ——
+      // 跳过 join 的话玩家屏幕上一切正常（旧状态还挂着），实际已经是个幽灵：
+      // 收不到任何推送，操作也全被当成「不在房间里」丢掉。
+      // 服务端的 joinRoom 对已在房间的玩家是幂等的，重复发没有副作用。
+      const roomId = loadLastRoom();
+      if (roomId) socket.emit("room:join", { roomId });
+      else set({ restoring: false });
+    });
+
+    // 断了就把 rtt 清掉 —— 留着最后一次的读数会显示成绿灯，比不显示还误导人
+    socket.on("disconnect", () => set({ conn: "reconnecting", rtt: null }));
 
     socket.on("state", (payload: StatePayload) => {
       saveLastRoom(payload.room.id);

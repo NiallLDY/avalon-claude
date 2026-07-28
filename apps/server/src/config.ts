@@ -35,6 +35,12 @@ export const config = {
   /** 单连接消息频率 */
   msgPerWindow: num("MSG_PER_WINDOW", 30),
   msgWindowMs: num("MSG_WINDOW_MS", 10_000),
+  /**
+   * 延迟心跳单独限流，不占上面那份操作配额 ——
+   * 后台每几秒一次的心跳没道理挤掉玩家的投票。
+   */
+  pingPerWindow: num("PING_PER_WINDOW", 6),
+  pingWindowMs: num("PING_WINDOW_MS", 10_000),
   maxPayloadBytes: num("MAX_PAYLOAD_BYTES", 4096),
 
   // ── 生命周期 ──

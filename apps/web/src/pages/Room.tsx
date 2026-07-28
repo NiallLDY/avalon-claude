@@ -21,8 +21,8 @@ import {
   type RoleId,
 } from "@avalon/shared";
 import { Avatar } from "../components/Avatar.js";
-import { SeatRing } from "../components/SeatRing.js";
-import { Button, Segmented, Sheet, Toggle } from "../components/ui.js";
+import { SeatBoard } from "../components/SeatBoard.js";
+import { Button, Latency, Segmented, Sheet, Toggle } from "../components/ui.js";
 import { labeler } from "../lib/labels.js";
 import { selfId, useStore } from "../store.js";
 
@@ -118,7 +118,10 @@ export const Room = () => {
           ← 退出
         </button>
         <div className="min-w-0 flex-1 text-center">
-          <p className="truncate text-sm">{room.name}</p>
+          <div className="flex min-w-0 items-center justify-center gap-1.5">
+            <p className="truncate text-sm">{room.name}</p>
+            <Latency />
+          </div>
           <p className="font-display text-lg tracking-[0.3em] text-gold">{room.id}</p>
         </div>
         <button
@@ -137,7 +140,7 @@ export const Room = () => {
         </button>
       </header>
 
-      <SeatRing
+      <SeatBoard
         seats={room.seats}
         game={null}
         selfSeat={mySeat}
@@ -158,7 +161,7 @@ export const Room = () => {
             <p className="mt-1 text-xs text-ink-mute">挑跟你线下位置对应的号</p>
           </>
         )}
-      </SeatRing>
+      </SeatBoard>
 
       <footer className="shrink-0 space-y-2 px-4 pb-2">
         {incomingSwap ? (

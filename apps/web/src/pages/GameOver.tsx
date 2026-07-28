@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import { ROLES, type ClientGameView } from "@avalon/shared";
-import { SeatRing } from "../components/SeatRing.js";
+import { SeatBoard } from "../components/SeatBoard.js";
 import { Button, Sheet } from "../components/ui.js";
 import { Report } from "./Report.js";
 import { labeler } from "../lib/labels.js";
@@ -47,7 +47,7 @@ export const GameOver = ({ game }: { game: ClientGameView }) => {
         ) : null}
       </header>
 
-      <SeatRing seats={room.seats} game={game} selfSeat={game.me?.seat ?? null}>
+      <SeatBoard seats={room.seats} game={game} selfSeat={game.me?.seat ?? null}>
         {myRole ? (
           <div>
             <p className="text-xs text-ink-mute">{game.me!.seat + 1}号 · 你是</p>
@@ -63,7 +63,7 @@ export const GameOver = ({ game }: { game: ClientGameView }) => {
         ) : (
           <p className="text-sm text-ink-mute">观战结束</p>
         )}
-      </SeatRing>
+      </SeatBoard>
 
       <div className="shrink-0 space-y-2 px-4 pt-1">
         <div className="flex gap-2">

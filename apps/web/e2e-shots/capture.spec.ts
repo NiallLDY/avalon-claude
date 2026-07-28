@@ -125,7 +125,7 @@ test("拍完整一局", async ({ browser }) => {
 
     // 依次点座位直到凑够人数
     const need = Number((await leader.getByText(/挑 \d+ 个人/).textContent())!.match(/\d+/)![0]);
-    const seatButtons = leader.locator("button.absolute:not([disabled])");
+    const seatButtons = leader.locator("button[data-seat]:not([disabled])");
     for (let i = 0; i < need; i++) await seatButtons.nth(i).click();
     await shot(leader, "组队-已选");
     await leader.getByRole("button", { name: /^确认 \d/ }).click();
@@ -180,7 +180,7 @@ test("拍完整一局", async ({ browser }) => {
     }
   }
   await shot(assassin, "刺杀");
-  await assassin.locator("button.absolute:not([disabled])").first().click();
+  await assassin.locator("button[data-seat]:not([disabled])").first().click();
   await shot(assassin, "刺杀-已选");
   await assassin.getByRole("button", { name: /^刺杀/ }).click();
 

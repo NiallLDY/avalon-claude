@@ -104,7 +104,7 @@ avalon/
    │  └─ ratelimit.ts config.ts ids.ts logger.ts
    └─ web/src/
       ├─ pages/              # Lobby / Room / Game / GameOver / Report
-      ├─ components/         # SeatRing / RoleCard / Avatar / ui
+      ├─ components/         # SeatBoard / RoleCard / Avatar / ui
       ├─ store.ts            # Zustand + socket
       └─ lib/identity.ts     # localStorage 身份
 ```
@@ -163,6 +163,7 @@ function projectFor(game: Game, viewer: PlayerId | null): ClientGameView
 | `game:start` | `{}` | 仅房主 |
 | `game:restart` | `{ rotateFirstLeader? }` | 仅房主，保留座位重新发牌 |
 | `game:action` | `{ action: ClientAction }` | 全部对局动作走这一个通道 |
+| `net:ping` | `{ t }` | 测延迟；`t` 是客户端时间戳，服务端原样回声。**独立限流**，不占操作配额 |
 
 `ClientAction` 是 `ACK_ROLE` / `PROPOSE_TEAM` / `VOTE` / `PLAY_CARD` / `LADY_CHECK` /
 `EARLY_ASSASSINATE` / `ASSASSINATE` / `ADVANCE` 的可辨识联合。
@@ -180,6 +181,7 @@ function projectFor(game: Game, viewer: PlayerId | null): ClientGameView
 | `error` | `{ code, message }` |
 | `room:list` | 大厅房间列表 |
 | `kicked` | `{ reason }`，被踢或房间解散 |
+| `net:pong` | `{ t }`，`net:ping` 的回声。RTT 只在客户端一侧算，两端时钟不用对齐 |
 
 > 设计取向：**服务端每次变更下发全量裁剪视图**，不做增量 diff。状态才几 KB，简单胜过优化，且天然解决重连一致性。
 >
@@ -227,7 +229,7 @@ function projectFor(game: Game, viewer: PlayerId | null): ClientGameView
 | 页面 | 说明 |
 |---|---|
 | **首页 / 大厅** | 昵称头像设置卡 → 房间列表（搜索、状态标签、人数）→ 建房 / 输码加入 |
-| **房间等待页** | 环形座位、房主设置面板（Sheet）、开始按钮 |
+| **房间等待页** | 两列座位、房主设置面板（Sheet）、开始按钮 |
 | **对局页** | **核心单屏**，见下 |
 | **终局页** | 全员身份揭晓、逐轮战报、再来一局 |
 
@@ -235,12 +237,12 @@ function projectFor(game: Game, viewer: PlayerId | null): ClientGameView
 
 ```
 ┌────────────────────────────────────┐
-│ ①  ●●○○○  流局 ●●○○○   房间码 ⋮  │  顶部：5 轮任务进度 + 流局计数
+│ ①  ●●○○○   ● 42ms   流局 ●●○○○ 你是3号 │  顶部：任务进度 + 延迟 + 流局
 ├────────────────────────────────────┤
 │                                    │
-│         ②  环形座位区              │  10 个座位沿椭圆排布
-│      (头像 / 昵称 / 👑队长          │  中心：当前阶段大字
-│       / ✅上车 / 投票结果角标)      │       + 倒计时/提示
+│   ① ○     ②  座位区    ② ○        │  两列贴左右两侧，顺序固定
+│   ③ ○   (头像/昵称/👑队长  ④ ○      │  1、2 / 3、4 …… 从左到右、
+│   ⑤ ○    /✅上车/投票角标)          │  从上到下；中间是阶段大字
 │                                    │
 ├────────────────────────────────────┤
 │ ③  阶段提示：请队长选择 3 名队员    │  中部：一行状态文案
@@ -251,7 +253,9 @@ function projectFor(game: Game, viewer: PlayerId | null): ClientGameView
 ```
 
 - **① 顶部条**：5 个任务圆点（显示该轮人数、保护轮标 🛡、完成后染蓝/红）+ 5 个流局点。
-- **② 环形座位**：与线下真实座次一致，一眼对上人。座位角标承载全部实时信息（队长冠、上车勾、投票 ✓/✗、女神令牌、掉线灰度）。
+- **② 两列座位**：座次与线下一致，**顺序对所有人相同** —— 不按「自己」旋转。
+  转过的圈每个人看到的排列都不一样，线下喊「左边第二个」时对不上；固定顺序则号码在屏幕上的位置也不会因换座而跳。自己那格单独标注。
+  座位角标承载全部实时信息（队长冠、上车勾、投票 ✓/✗、女神令牌、掉线灰度）。
 - **④ 操作区**是唯一随阶段变化的部分：
   - 组队：`确认队伍 (2/3)` + 发言方向切换
   - 投票：并排两个大按钮 `赞成` / `反对`

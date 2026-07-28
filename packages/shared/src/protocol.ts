@@ -96,6 +96,8 @@ export const CLIENT_EVENT_NAMES = [
   "game:start",
   "game:restart",
   "game:action",
+  /** 测延迟用的心跳。服务端原样回 net:pong，往返差就是 RTT */
+  "net:ping",
 ] as const;
 
 export type ClientEventName = (typeof CLIENT_EVENT_NAMES)[number];
@@ -188,4 +190,6 @@ export interface ServerEvents {
   "room:list": (payload: { rooms: readonly RoomSummary[] }) => void;
   /** 被踢或房间解散 */
   kicked: (payload: { reason: string }) => void;
+  /** `net:ping` 的回声，`t` 是客户端发出时自己的时间戳 */
+  "net:pong": (payload: { t: number }) => void;
 }

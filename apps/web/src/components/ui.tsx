@@ -113,6 +113,35 @@ export const ConnectionBanner = () => {
   );
 };
 
+/**
+ * 延迟指示。一个小圆点 + 毫秒数，常驻在房间和对局的右上角。
+ *
+ * 三档阈值取自「线下发牌器」这个场景：所有人围着一张桌子，
+ * 掉一张牌的延迟差几百毫秒没人察觉，真正要暴露的是「点了没反应」那一档。
+ * 没有绿色就用蓝 —— 调色板里蓝本来就是正方阵营色。
+ */
+export const Latency = ({ className = "" }: { className?: string }) => {
+  const rtt = useStore((s) => s.rtt);
+  const conn = useStore((s) => s.conn);
+  const dead = conn !== "connected" || rtt === null;
+
+  const tone = dead ? "bg-ink-mute" : rtt <= 150 ? "bg-blue" : rtt <= 400 ? "bg-gold" : "bg-red";
+  // 上限封死在三位数。四位数会把顶栏那一行挤换行，而且「1247 还是 2100」
+  // 对玩家没有任何区别 —— 都是「卡到不能玩」
+  const text = dead ? "--" : rtt >= 1000 ? "1s+" : `${rtt}ms`;
+
+  return (
+    <span
+      className={`flex shrink-0 items-center gap-1 text-[0.6rem] leading-none whitespace-nowrap
+        text-ink-mute tabular-nums ${className}`}
+      aria-label="网络延迟"
+    >
+      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone}`} />
+      {text}
+    </span>
+  );
+};
+
 export const Segmented = <T extends string>({
   value,
   options,

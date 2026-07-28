@@ -53,6 +53,46 @@ test.describe("连接状态", () => {
   });
 });
 
+test.describe("断线重连", () => {
+  test("网断了再回来要自动回到房间，而不是变成幽灵", async ({ browser }) => {
+    const a = await browser.newContext({ locale: "zh-CN" });
+    const b = await browser.newContext({ locale: "zh-CN" });
+    const pa = await a.newPage();
+    const pb = await b.newPage();
+
+    await openApp(pa, "阿隆");
+    const code = await createRoom(pa, "重连测试");
+    await sit(pa, 0);
+
+    await openApp(pb, "小梅");
+    await pb.getByPlaceholder("房间码").fill(code);
+    await pb.getByRole("button", { name: "进" }).click();
+    await expect(pb.locator("p.font-display").first()).toHaveText(code);
+    await sit(pb, 1);
+    await expect(pb.getByText("阿隆")).toBeVisible();
+
+    // 把 A 的网拔了。这不是刷新 —— 页面还在，state 还在内存里
+    await a.setOffline(true);
+    await expect(pa.getByText("连接断开，正在重连")).toBeVisible();
+    await expect(pb.locator("button[data-seat]").filter({ hasText: "掉线" })).toBeVisible();
+
+    await a.setOffline(false);
+    await expect(pa.getByText("连接断开，正在重连")).toHaveCount(0);
+
+    // **别人眼里 A 得真的回来。**
+    // socket.io 重连建的是一条新连接，服务端那边 roomId 是空的；
+    // 前端不重新 join 的话，A 屏幕上一切正常，实际已经收不到任何推送了。
+    await expect(pb.locator("button[data-seat]").filter({ hasText: "掉线" })).toHaveCount(0);
+
+    // A 也要能继续收到推送：B 离座，A 那边得看到位子空出来
+    await pb.getByRole("button", { name: "离座" }).click();
+    await expect(pa.getByRole("button", { name: "坐这 2" })).toBeVisible();
+
+    await a.close();
+    await b.close();
+  });
+});
+
 test.describe("昵称", () => {
   test("清空后重打不该报「参数不合法」", async ({ page }) => {
     await openApp(page);
@@ -224,7 +264,7 @@ test.describe("座位号", () => {
 
     // 换座请求里必须出现「1号 阿隆」而不是光秃秃的「阿隆」
     await pa.getByRole("button", { name: "换座" }).click();
-    await pa.locator("button.absolute").filter({ hasText: "小梅" }).first().click();
+    await pa.locator("button[data-seat]").filter({ hasText: "小梅" }).first().click();
     await expect(pb.getByText(/1号 阿隆.*想和你换座位/)).toBeVisible();
 
     await a.close();

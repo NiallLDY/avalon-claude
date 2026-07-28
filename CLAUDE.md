@@ -22,7 +22,7 @@ Melbourne 阿瓦隆 —— 线下面对面玩阿瓦隆时使用的**在线发牌
 | `apps/web` | React 单屏客户端，PWA。规则页是**唯一允许滚动**的页面 |
 | `assets/roles/` | 角色卡插画，生成流水线见 `scripts/art/` |
 
-187 个测试。部署见 `README.md`。
+197 个 vitest + 18 个 Playwright e2e。部署见 `README.md`。
 
 ## 技术栈速查
 

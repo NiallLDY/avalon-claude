@@ -57,6 +57,7 @@ type AppSocket = Socket & { data: SocketData };
 
 export const attachSocket = (io: IOServer, registry: Registry, store: Store): void => {
   const msgLimiter = createRateLimiter(config.msgPerWindow, config.msgWindowMs);
+  const pingLimiter = createRateLimiter(config.pingPerWindow, config.pingWindowMs);
   const socketsPerIp = createCounter();
 
   const now = (): number => Date.now();
@@ -201,6 +202,18 @@ export const attachSocket = (io: IOServer, registry: Registry, store: Store): vo
         }
       });
     };
+
+    /**
+     * 延迟心跳。**不走上面的 on()** —— 它用的是玩家操作的那份配额，
+     * 后台心跳挤掉一次投票是不能接受的。超限或非法就静默丢弃：
+     * 这是后台轮询，弹「操作太快了」纯属噪音。
+     */
+    listen("net:ping", (raw: unknown) => {
+      if (!pingLimiter.hit(socket.id, now())) return;
+      const parsed = CLIENT_EVENTS["net:ping"].safeParse(raw ?? {});
+      if (!parsed.success) return;
+      socket.emit("net:pong", { t: parsed.data.t });
+    });
 
     on("room:join", ({ roomId, asSpectator }) => {
       const room = registry.get(roomId);
