@@ -7,7 +7,7 @@
  * 后台该往下走就往下走，不会因为谁没关弹窗卡住全场。
  */
 
-import type { PublicPlayer } from "@avalon/shared";
+import { REJECT_LIMIT, type PublicPlayer } from "@avalon/shared";
 import { PlayerChip, PlayerChips } from "./PlayerChip.js";
 import { Button } from "./ui.js";
 import { useStore, type ResultCard } from "../store.js";
@@ -48,8 +48,14 @@ const Body = ({
     const yes = card.votes.filter(Boolean).length;
     return (
       <>
+        {/*
+          说「组队成功/失败」而不是「上车/翻车」。
+          翻车跟任务失败在字面上分不开，而这两件事完全不同 ——
+          一个是这一车没发出去，一个是车发出去了但砸了。
+          这里跟任务结果的「任务成功/任务失败」凑成一对，一眼就知道在说哪一步。
+        */}
         <p className={`font-display text-3xl ${card.approved ? "text-blue" : "text-red"}`}>
-          {card.approved ? "上车" : "翻车"}
+          {card.approved ? "组队成功" : "组队失败"}
         </p>
         <p className="mt-1 text-sm text-ink-soft">
           {yes} 票赞成 · {card.votes.length - yes} 票反对
@@ -79,7 +85,7 @@ const Body = ({
 
         {!card.approved ? (
           <p className="mt-4 text-xs text-ink-mute">
-            连续第 {card.rejectStreak} 次没上车，满 5 次这一局就输了
+            组队失败就是流局 —— 这一轮第 {card.rejectStreak} 次，满 {REJECT_LIMIT} 次红方直接赢
           </p>
         ) : null}
       </>

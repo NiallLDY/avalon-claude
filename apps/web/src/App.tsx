@@ -12,6 +12,7 @@ import { useStore } from "./store.js";
 export const App = () => {
   const connect = useStore((s) => s.connect);
   const state = useStore((s) => s.state);
+  const finishedGame = useStore((s) => s.finishedGame);
   const needsOnboarding = useStore((s) => s.needsOnboarding);
   const rulesOpen = useStore((s) => s.rulesOpen);
   const setRulesOpen = useStore((s) => s.setRulesOpen);
@@ -27,13 +28,15 @@ export const App = () => {
     );
   }
 
-  // 路由就这么点，没必要引 react-router：状态本身决定该显示哪一屏
+  // 路由就这么点，没必要引 react-router：状态本身决定该显示哪一屏。
+  // 唯一的例外是终局：房间可能已经被别人退回等待页了，但我还没看完 ——
+  // 那就接着显示本地留的那份，直到我自己点掉（store 里的 finishedGame）。
   const screen = !state ? (
     <Lobby />
+  ) : finishedGame ? (
+    <GameOver game={finishedGame} />
   ) : state.game === null ? (
     <Room />
-  ) : state.game.phase === "GAME_OVER" ? (
-    <GameOver game={state.game} />
   ) : (
     <Game />
   );

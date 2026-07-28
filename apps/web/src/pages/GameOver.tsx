@@ -19,7 +19,7 @@ const REASON: Record<string, string> = {
 };
 
 export const GameOver = ({ game }: { game: ClientGameView }) => {
-  const { state, emit, leaveRoom } = useStore();
+  const { state, leaveFinished, leaveRoom } = useStore();
   const [reportOpen, setReportOpen] = useState(false);
   if (!state?.room) return null;
 
@@ -72,12 +72,14 @@ export const GameOver = ({ game }: { game: ClientGameView }) => {
             看战报
           </Button>
           {/*
-            **谁都能点，不只是房主。** 点了是回等待页，不是直接发牌 ——
-            座位和设置都留着，大家重新准备一次，房主再开。
+            **谁都能点，不只是房主，而且各点各的。**
+            点了自己回等待页 —— 别人还在看身份揭晓和战报的不会被一起拽走
+            （终局画面在 store 里留了一份，见 finishedGame）。
+            回的是等待页不是新一局：座位和设置都留着，大家重新准备，房主再开。
             打完一局总有人要去倒水，准备那一步就是用来等他们的。
           */}
           {seated ? (
-            <Button className="flex-[2]" onClick={() => emit("game:restart")}>
+            <Button className="flex-[2]" onClick={leaveFinished}>
               再来一局
             </Button>
           ) : (

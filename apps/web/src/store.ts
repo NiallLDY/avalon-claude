@@ -7,6 +7,7 @@ import { create } from "zustand";
 import { io, type Socket } from "socket.io-client";
 import type {
   ClientAction,
+  ClientGameView,
   GameEvent,
   GameSettings,
   Profile,
@@ -70,6 +71,15 @@ interface AppState {
   profile: Profile;
   rooms: readonly RoomSummary[];
   state: StatePayload | null;
+  /**
+   * 刚打完那一局的快照，**由本人点掉**。
+   *
+   * 「再来一局」是全房间一起回等待页的，谁先点大家一起走 ——
+   * 于是还在看身份揭晓和战报的人被当场拽走，结果一闪而过。
+   * 所以终局画面在本地留一份：房间已经回等待页了也照样显示，
+   * 直到你自己点「再来一局」。新的一局开始时会被顶掉（那时必须跟上）。
+   */
+  finishedGame: ClientGameView | null;
   /** 正在自动回房（刷新后恢复），此时不该把用户甩回大厅 */
   restoring: boolean;
   /** 还没设过昵称头像，先挡一道首次设置 */
@@ -99,6 +109,8 @@ interface AppState {
   toast: (text: string, tone?: Toast["tone"]) => void;
   dismissToast: (id: number) => void;
   dismissResult: () => void;
+  /** 看完终局了，回等待页。房间还没重开的话顺手把它重开 */
+  leaveFinished: () => void;
 }
 
 const identity = loadIdentity();
@@ -139,6 +151,7 @@ export const useStore = create<AppState>((set, get) => ({
   profile: loadProfile(),
   rooms: [],
   state: null,
+  finishedGame: null,
   restoring: loadLastRoom() !== null,
   needsOnboarding: !hasProfile(),
   rulesOpen: false,
@@ -195,6 +208,10 @@ export const useStore = create<AppState>((set, get) => ({
     socket.on("state", (payload: StatePayload) => {
       saveLastRoom(payload.room.id);
       set({ state: payload, restoring: false });
+
+      // 终局画面留一份在本地，等本人点掉；新的一局开始就顶掉它
+      if (payload.game?.phase === "GAME_OVER") set({ finishedGame: payload.game });
+      else if (payload.game !== null) set({ finishedGame: null });
     });
 
     socket.on("room:list", ({ rooms }: { rooms: RoomSummary[] }) => set({ rooms }));
@@ -253,7 +270,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     socket.on("kicked", ({ reason }: { reason: string }) => {
       clearLastRoom();
-      set({ state: null, restoring: false });
+      set({ state: null, finishedGame: null, restoring: false });
       get().toast(reason, "error");
     });
 
@@ -294,7 +311,13 @@ export const useStore = create<AppState>((set, get) => ({
   leaveRoom: () => {
     get().socket?.emit("room:leave", {});
     clearLastRoom();
-    set({ state: null, restoring: false });
+    set({ state: null, finishedGame: null, restoring: false });
+  },
+
+  leaveFinished: () => {
+    // 房间还停在终局就由我来把它退回等待页；已经有人先点过就只清自己这份
+    if (get().state?.game !== null) get().socket?.emit("game:restart", {});
+    set({ finishedGame: null });
   },
 
   refreshRooms: async (query) => {

@@ -161,7 +161,7 @@ function projectFor(game: Game, viewer: PlayerId | null): ClientGameView
 | `room:options` | `{ name?, visibility?, allowSpectators? }` | 仅房主 |
 | `room:kick` / `room:transferHost` | `{ playerId }` | 仅房主 |
 | `game:start` | `{}` | 仅房主 |
-| `game:restart` | `{}` | **任何在座玩家**；终局后把房间退回等待页（保留座位与设置，清空准备），不直接发牌 |
+| `game:restart` | `{}` | **任何在座玩家**；终局后把房间退回等待页（保留座位与设置，清空准备），不直接发牌。终局画面在各自客户端本地留一份，谁点掉谁走 |
 | `game:action` | `{ action: ClientAction }` | 全部对局动作走这一个通道 |
 | `net:ping` | `{ t }` | 测延迟；`t` 是客户端时间戳，服务端原样回声。**独立限流**，不占操作配额 |
 
@@ -271,6 +271,8 @@ function projectFor(game: Game, viewer: PlayerId | null): ClientGameView
 ### 8.3 视觉基调
 - **暗色为主**（线下昏暗环境护眼、也符合中世纪调性），单一暗色主题，不做亮色。
 - 阵营色：蓝方 `#3B6FE0 → #1B2A6B` 靛蓝银白；红方 `#C0392B → #4A0E0E` 暗红铜金；中性金 `#D8B36A` 作强调。
+- 状态绿 `#3F9A5A`：只表示「这个人已经操作过了」（投过票 / 出过牌 / 看过牌）。
+  **刻意不用蓝色** —— 揭票时蓝色是「赞成」，混用会让人以为绿点透露了投票内容。
 - 圆角 + 微玻璃拟态 + 轻微质感噪点，避免纯扁平的廉价感。
 - 全站禁用页面级滚动：`html,body{overflow:hidden;height:100dvh}`，用 `dvh` 规避 iOS 地址栏跳动；`viewport-fit=cover` + `env(safe-area-inset-*)` 处理刘海/小白条。
 - PWA：`display: standalone`，加桌面后无浏览器地址栏，单屏体验才真正成立。

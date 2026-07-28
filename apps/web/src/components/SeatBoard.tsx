@@ -34,6 +34,25 @@ interface Props {
  */
 const avatarSize = (rows: number): number => (rows <= 3 ? 48 : rows === 4 ? 42 : 36);
 
+/**
+ * 当前阶段这个座位该不该动、动了没。null = 这一阶段轮不到他。
+ *
+ * 只回答「做没做」，**绝不回答「做了什么」** —— 投了赞成还是反对、
+ * 出的成功还是失败，在揭晓前谁都不能从这里看出来（铁律 2、3）。
+ * 用到的三个数组本来就在裁剪后的视图里，不含任何机密。
+ */
+const actState = (game: ClientGameView | null, seat: number): "done" | "waiting" | null => {
+  if (!game) return null;
+  if (game.phase === "ROLE_REVEAL") return game.ackedSeats.includes(seat) ? "done" : "waiting";
+  if (game.phase === "VOTE") return game.votedSeats.includes(seat) ? "done" : "waiting";
+  if (game.phase === "MISSION") {
+    // 没上车的人这一阶段没事做，不该被标成「还在等他」
+    if (!game.team?.includes(seat)) return null;
+    return game.playedSeats.includes(seat) ? "done" : "waiting";
+  }
+  return null;
+};
+
 export const SeatBoard = ({
   seats,
   game,
@@ -79,9 +98,7 @@ export const SeatBoard = ({
           const isSelected = selected.includes(seat);
           const isLeader = game?.leaderSeat === seat;
           const onTeam = game?.team?.includes(seat) ?? false;
-          const voted = game?.votedSeats.includes(seat) ?? false;
-          const played = game?.playedSeats.includes(seat) ?? false;
-          const acked = game?.ackedSeats.includes(seat) ?? false;
+          const act = actState(game, seat);
           const revealed = game?.revealedVotes?.[seat];
           const isLady = game?.lady?.holderSeat === seat;
           const role = game?.reveal?.[seat];
@@ -158,9 +175,23 @@ export const SeatBoard = ({
                   >
                     {revealed ? "✓" : "✗"}
                   </span>
-                ) : voted || played || acked ? (
-                  // 未揭晓时只显示「已操作」，绝不显示操作内容
-                  <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-gold ring-2 ring-ground" />
+                ) : act !== null ? (
+                  /*
+                    「他动了没」。以前是个 12px 的金点，三个阶段还长得一模一样，
+                    等于没有 —— 桌上根本看不出还在等谁。
+                    现在做成和揭票角标同样大的实心/空心二态：
+                    金色 ✓ = 已操作，虚线 ⋯ = 还在等他。
+                    **只说做没做，不说做了什么。**
+                  */
+                  <span
+                    className={`absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center
+                      rounded-full text-[0.7rem] leading-none font-bold ring-2 ring-ground
+                      ${act === "done"
+                        ? "bg-green text-white"
+                        : "border border-dashed border-ink-mute bg-surface-2 text-ink-mute"}`}
+                  >
+                    {act === "done" ? "✓" : "⋯"}
+                  </span>
                 ) : null}
 
                 {/* 准备好了打个勾。开局前用，开局后 game 非空就不显示了 */}

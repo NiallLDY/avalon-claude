@@ -32,7 +32,8 @@ export const Report = ({
             <h3 className="font-medium">第 {round + 1} 轮</h3>
             {mission ? (
               <span className={`text-xs ${mission.success ? "text-blue" : "text-red"}`}>
-                {mission.success ? "成功" : "失败"} · {mission.failCount} 张失败牌
+                {/* 写全「任务成功」—— 旁边就是「组队成功」，只写「成功」分不清是哪一步 */}
+                {mission.success ? "任务成功" : "任务失败"} · {mission.failCount} 张失败牌
                 {mission.failsRequired === 2 ? "（保护轮，需 2 张）" : ""}
               </span>
             ) : (
@@ -49,7 +50,8 @@ export const Report = ({
                       p.approved ? "bg-blue/20 text-blue" : "bg-red/20 text-red"
                     }`}
                   >
-                    {p.approved ? "通过" : "否决"}
+                    {/* 跟结果弹窗一个口径：组队失败就是流局 */}
+                    {p.approved ? "组队成功" : "流局"}
                   </span>
                   <span className="text-[0.68rem] text-ink-mute">队长</span>
                   <PlayerChip player={seated[p.leaderSeat]} seat={p.leaderSeat} tone="gold" />

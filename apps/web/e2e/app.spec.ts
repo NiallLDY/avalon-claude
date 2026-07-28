@@ -66,7 +66,7 @@ test.describe("断线重连", () => {
 
     await openApp(pb, "小梅");
     await pb.getByPlaceholder("房间码").fill(code);
-    await pb.getByRole("button", { name: "进" }).click();
+    await pb.getByRole("button", { name: "进", exact: true }).click();
     await expect(pb.locator("p.font-display").first()).toHaveText(code);
     await sit(pb, 1);
     await expect(pb.getByText("阿隆")).toBeVisible();
@@ -208,7 +208,7 @@ test.describe("换座位", () => {
     await sit(pa, 0);
     await openApp(pb);
     await pb.getByPlaceholder("房间码").fill(code);
-    await pb.getByRole("button", { name: "进" }).click();
+    await pb.getByRole("button", { name: "进", exact: true }).click();
     await expect(pb.locator("p.font-display").first()).toHaveText(code);
     await sit(pb, 1);
     await expect(pa.getByText("2/5 就位").or(pa.getByText(/还有 3 个空位/))).toBeVisible();
@@ -259,7 +259,7 @@ test.describe("座位号", () => {
 
     await openApp(pb, "小梅");
     await pb.getByPlaceholder("房间码").fill(code);
-    await pb.getByRole("button", { name: "进" }).click();
+    await pb.getByRole("button", { name: "进", exact: true }).click();
     await sit(pb, 1);
 
     // 换座请求里必须出现「1号 阿隆」而不是光秃秃的「阿隆」
@@ -294,7 +294,7 @@ test.describe("退出房间", () => {
     await sit(host, 0);
     for (const [i, p] of pages.slice(1).entries()) {
       await p.getByPlaceholder("房间码").fill(code);
-      await p.getByRole("button", { name: "进" }).click();
+      await p.getByRole("button", { name: "进", exact: true }).click();
       await expect(p.locator("p.font-display").first()).toHaveText(code);
       await sit(p, i + 1);
     }
@@ -320,6 +320,81 @@ test.describe("退出房间", () => {
     // 而且刷新之后不该又被自动拉回房间
     await quitter.reload();
     await expect(quitter.getByRole("button", { name: "开房间" })).toBeVisible();
+
+    for (const c of ctxs) await c.close();
+  });
+});
+
+test.describe("终局", () => {
+  test("别人点了再来一局，我还没看完就不该被拽走", async ({ browser }) => {
+    test.setTimeout(90_000);
+    const ctxs = await Promise.all(
+      Array.from({ length: 5 }, () => browser.newContext({ locale: "zh-CN" })),
+    );
+    const pages = await Promise.all(ctxs.map((c) => c.newPage()));
+    for (const [i, p] of pages.entries()) await openApp(p, `玩家${i}`);
+
+    const host = pages[0]!;
+    const code = await createRoom(host, "终局测试");
+    await sit(host, 0);
+    for (const [i, p] of pages.slice(1).entries()) {
+      await p.getByPlaceholder("房间码").fill(code);
+      await p.getByRole("button", { name: "进", exact: true }).click();
+      await expect(p.locator("p.font-display").first()).toHaveText(code);
+      await sit(p, i + 1);
+    }
+    for (const p of pages) await p.getByRole("button", { name: "准备" }).click();
+    await host.getByRole("button", { name: "开始游戏" }).click();
+    for (const p of pages) await p.getByRole("button", { name: "我已看牌" }).click();
+
+    // 打到终局最快的路子是连续 5 次流局 —— 红方直接赢，不用打完三车任务
+    for (let round = 0; round < 5; round++) {
+      await expect(host.getByText(/挑 \d+ 个人/)).toBeVisible();
+      let leader = host;
+      for (const p of pages) {
+        // 还没选够人时按钮是「选 N 个人」，选够了才变成「确认 N」
+        if (
+          await p
+            .getByRole("button", { name: /选 \d+ 个人|^确认 \d/ })
+            .isVisible()
+            .catch(() => false)
+        ) {
+          leader = p;
+          break;
+        }
+      }
+      const need = Number((await leader.getByText(/挑 \d+ 个人/).textContent())!.match(/\d+/)![0]);
+      const seats = leader.locator("button[data-seat]:not([disabled])");
+      for (let i = 0; i < need; i++) await seats.nth(i).click();
+      await leader.getByRole("button", { name: /^确认 \d/ }).click();
+
+      await expect(host.getByText("全体投票")).toBeVisible();
+      for (const p of pages) await p.getByRole("button", { name: "反对" }).click();
+
+      for (const p of pages) {
+        const ok = p.getByRole("button", { name: "知道了" });
+        if (await ok.isVisible().catch(() => false)) await ok.click();
+      }
+      const skip = host.getByRole("button", { name: "立即继续" });
+      if (await skip.isVisible().catch(() => false)) await skip.click();
+    }
+
+    for (const p of pages) await expect(p.getByText(/获胜$/)).toBeVisible();
+
+    // 3 号先点「再来一局」，他自己回等待页
+    await pages[2]!.getByRole("button", { name: "再来一局" }).click();
+    await expect(pages[2]!.getByRole("button", { name: "准备" })).toBeVisible();
+
+    // **其他人必须还停在终局。**
+    // 之前重开是整个房间一起走的，还在看身份揭晓和战报的人被当场拽走，
+    // 结果一闪而过 —— 这条就是防它回来的
+    for (const p of [host, pages[1]!, pages[3]!, pages[4]!]) {
+      await expect(p.getByText(/获胜$/)).toBeVisible();
+      await expect(p.getByRole("button", { name: "再来一局" })).toBeVisible();
+    }
+
+    await host.getByRole("button", { name: "再来一局" }).click();
+    await expect(host.getByRole("button", { name: "准备" })).toBeVisible();
 
     for (const c of ctxs) await c.close();
   });

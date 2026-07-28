@@ -66,7 +66,7 @@ test("拍完整一局", async ({ browser }) => {
   await host.getByRole("button", { name: "坐这 1" }).click();
   for (const [i, page] of pages.slice(1).entries()) {
     await page.getByPlaceholder("房间码").fill(code);
-    await page.getByRole("button", { name: "进" }).click();
+    await page.getByRole("button", { name: "进", exact: true }).click();
     await expect(page.locator("p.font-display").first()).toHaveText(code);
     await page.getByRole("button", { name: `坐这 ${i + 2}` }).click();
   }
@@ -134,17 +134,25 @@ test("拍完整一局", async ({ browser }) => {
 
     await expect(host.getByText("全体投票")).toBeVisible();
     await shot(host, "投票");
-    for (const page of pages) {
+
+    // 先投一半停一下 —— 这张图要能看出座位上「谁投了、还在等谁」
+    for (const page of pages.slice(1, 3)) {
       await page.getByRole("button", { name: "赞成" }).click();
+    }
+    await shot(host, "投票-等人");
+
+    for (const page of pages) {
+      const yes = page.getByRole("button", { name: "赞成" });
+      if (await yes.isVisible().catch(() => false)) await yes.click();
     }
 
     // 结果弹窗盖住屏幕，要玩家自己点掉；后台会自动往下走
-    await expect(host.locator("p.font-display").filter({ hasText: /^(上车|翻车)$/ })).toBeVisible();
+    await expect(host.locator("p.font-display").filter({ hasText: /^组队(成功|失败)$/ })).toBeVisible();
     await shot(host, "揭票弹窗");
     await dismissAll();
 
     await expect(host.getByText(/队员执行任务/)).toBeVisible();
-    // 上车的人出牌
+    // 组队成功，这一车的人出牌
     for (const page of pages) {
       const ok = page.getByRole("button", { name: "任务成功" });
       const bad = page.getByRole("button", { name: "任务失败" });
@@ -195,9 +203,17 @@ test("拍完整一局", async ({ browser }) => {
   await host.waitForTimeout(400);
 
   // ── 再来一局 ──
-  // **非房主点**：谁都能重开。点完是回等待页，不是直接发牌。
+  // **各点各的**：非房主先点，他自己回等待页；房主还在看结果，不会被拽走。
   const other = pages[2]!;
   await other.getByRole("button", { name: "再来一局" }).click();
+  await expect(other.getByRole("button", { name: "准备" })).toBeVisible();
+  await expect(host.getByText(/获胜$/)).toBeVisible();
+  await shot(host, "终局-他人已重开");
+
+  for (const page of pages) {
+    const again = page.getByRole("button", { name: "再来一局" });
+    if (await again.isVisible().catch(() => false)) await again.click();
+  }
   for (const page of pages) {
     await expect(page.getByRole("button", { name: "准备" })).toBeVisible();
   }

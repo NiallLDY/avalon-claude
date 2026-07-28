@@ -103,6 +103,46 @@ const Progress = ({ game, room }: { game: ClientGameView; room: RoomView }) => {
   );
 };
 
+/**
+ * 「还在等谁」。计数下面直接把号码摊开：绿的动过了，灰的还没。
+ *
+ * 只有一个 `3/5 已投票` 的话，你知道还差两个，但不知道差**哪**两个 ——
+ * 线下就得挨个问「你投了吗」。号码摊开就一眼看到该催谁。
+ * 依然只说做没做，不说做了什么。
+ */
+const ActingStatus = ({ game }: { game: ClientGameView }) => {
+  const all = Array.from({ length: game.playerCount }, (_, i) => i);
+  const spec =
+    game.phase === "ROLE_REVEAL"
+      ? { label: "已看牌", seats: all, done: game.ackedSeats }
+      : game.phase === "VOTE"
+        ? { label: "已投票", seats: all, done: game.votedSeats }
+        : { label: "已出牌", seats: [...(game.team ?? [])], done: game.playedSeats };
+
+  return (
+    <div>
+      <p className="text-lg font-medium tabular-nums">
+        {spec.done.length}/{spec.seats.length} {spec.label}
+      </p>
+      <div className="mt-2 flex flex-wrap justify-center gap-1">
+        {spec.seats.map((seat) => {
+          const done = spec.done.includes(seat);
+          return (
+            <span
+              key={seat}
+              className={`flex h-5 w-5 items-center justify-center rounded-full text-[0.65rem]
+                font-bold tabular-nums
+                ${done ? "bg-green text-white" : "bg-surface-2 text-ink-mute ring-1 ring-line"}`}
+            >
+              {seat + 1}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 /** 从队长开始，按方向绕一圈的座位顺序。线下最常吵的就是「谁先说」 */
 const speakOrder = (leaderSeat: number, total: number, dir: "CW" | "CCW"): number[] =>
   Array.from({ length: total }, (_, i) =>
@@ -163,14 +203,15 @@ export const Game = () => {
     }
   };
 
-  /** 中心提示：等谁 */
+  /** 等人的三个阶段由 ActingStatus 接管 —— 它还要摊开号码 */
+  const acting = phase === "ROLE_REVEAL" || phase === "VOTE" || phase === "MISSION";
+
+  /** 中心提示：结果类阶段的一行大字 */
   const waitingText = (): string | null => {
-    if (phase === "ROLE_REVEAL") return `${game.ackedSeats.length}/${game.playerCount} 已看牌`;
-    if (phase === "VOTE") return `${game.votedSeats.length}/${game.playerCount} 已投票`;
-    if (phase === "MISSION") return `${game.playedSeats.length}/${game.team?.length ?? 0} 已出牌`;
     if (phase === "VOTE_RESULT") {
       const last = game.proposals.at(-1);
-      return last?.approved ? "队伍通过" : "队伍被否决";
+      // 跟结果弹窗、跟任务结果统一口径：组队成功/失败 → 任务成功/失败
+      return last?.approved ? "组队成功" : "组队失败";
     }
     if (phase === "MISSION_RESULT") {
       const last = game.missions.at(-1);
@@ -202,7 +243,9 @@ export const Game = () => {
         onSelect={toggle}
         selfSeat={me?.seat ?? null}
       >
-        {waitingText() ? (
+        {acting ? (
+          <ActingStatus game={game} />
+        ) : waitingText() ? (
           <p
             className={`text-lg font-medium ${
               phase === "MISSION_RESULT"

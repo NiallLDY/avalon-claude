@@ -20,6 +20,11 @@
   --color-red: #c0392b;
   --color-red-deep: #4a0e0e;
   --color-gold: #d8b36a;
+  /*
+   * 「已操作」的绿。和阵营蓝红刻意错开 —— 它说的是流程状态（投没投、出没出牌），
+   * 不是立场；用蓝色会跟揭票时的「赞成」撞在一起。
+   */
+  --color-green: #3f9a5a;
 
   --font-display: "Cinzel", "Noto Serif SC", serif;
   /* 中文用系统字体栈 —— 引入几 MB 的中文 webfont 在手机上是灾难 */
