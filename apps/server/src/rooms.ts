@@ -580,26 +580,27 @@ export const startGame = (room: Room, actorId: string, now: number): RoomResult 
   return ok(undefined);
 };
 
-/** 再来一局：保留座位与设置，重新洗牌。可选把首任队长顺延一位 */
-export const restartGame = (
-  room: Room,
-  actorId: string,
-  rotateFirstLeader: boolean,
-  now: number,
-): RoomResult => {
-  if (!isHost(room, actorId)) return err("NOT_HOST");
+/**
+ * 再来一局：把房间**退回等待页**，不直接发牌。
+ *
+ * 两个刻意的选择：
+ *
+ * 1. **任何在座玩家都能点**，不限房主。一局刚打完谁都可能是第一个想继续的，
+ *    卡在房主一个人身上只会让全场干等他解锁手机。
+ * 2. **退回等待页而不是直接开新局。** 座位、房主、设置全都留着，
+ *    想换人、改人数、开扩展就在等待页做；准备清空，重新确认一遍再开。
+ *    直接发牌看着省事，但打完一局总有人要去倒水上厕所 ——
+ *    准备这一步就是用来等他们的。
+ */
+export const reopenRoom = (room: Room, actorId: string, now: number): RoomResult => {
+  if (room.game === null) return err("NOT_IN_GAME");
+  // 只有终局能重开。对局进行中谁都不许把牌局掀了
   if (isInGame(room)) return err("ROOM_IN_GAME");
-  const previous = room.game;
+  if (!isSeated(room, actorId)) return err("NOT_SEATED");
+
   room.game = null;
-  const started = startGame(room, actorId, now);
-  if (!started.ok) {
-    room.game = previous;
-    return started;
-  }
-  if (rotateFirstLeader && previous && room.game) {
-    const next = (previous.leaderSeat + 1) % room.seatCount;
-    room.game = { ...(room.game as GameState), leaderSeat: next };
-  }
+  clearReady(room);
+  touch(room, now);
   return ok(undefined);
 };
 

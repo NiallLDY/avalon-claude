@@ -115,7 +115,8 @@ export const CLIENT_EVENTS = {
   "room:kick": z.object({ playerId: playerIdSchema }),
   "room:transferHost": z.object({ playerId: playerIdSchema }),
   "game:start": z.object({}),
-  "game:restart": z.object({ rotateFirstLeader: z.boolean().optional() }),
+  /** 再来一局 = 退回等待页。任何在座玩家都能发，没有参数 */
+  "game:restart": z.object({}),
   "game:action": z.object({ action: clientActionSchema }),
   /**
    * 延迟心跳。`t` 是客户端自己的时间戳，服务端只负责原样回声 ——

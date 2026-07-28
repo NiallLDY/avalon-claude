@@ -359,6 +359,28 @@ describe("一整局", () => {
       // 但出牌人映射依然不给
       expect(JSON.stringify(c.state!.game)).not.toContain("cardsBySeat");
     }
+
+    // ── 再来一局 ──
+    // 打完这一局，房间必须还能接着用。**非房主**点也要能重开。
+    for (const c of members) c.errors.length = 0;
+    members[3]!.socket.emit("game:restart", {});
+
+    await waitFor(members, (c) => c.state?.game === null, "退回等待页");
+    for (const c of members) {
+      expect(c.errors).toEqual([]);
+      // 座位原样保留 —— 线下大家还坐在原位上
+      expect(c.state!.room.seats.map((p) => p?.id)).toEqual(["p0", "p1", "p2", "p3", "p4"]);
+      // 准备清空，得重新确认一遍
+      expect(c.state!.room.canStart).toBe(false);
+      expect(c.state!.room.startBlockedReason).toContain("没准备");
+    }
+
+    // 重新准备 → 房主开新局，走完一个完整的循环
+    for (const c of members) c.socket.emit("room:ready", { ready: true });
+    await waitFor(members, (c) => c.state?.room.canStart === true, "全员准备");
+    members[0]!.socket.emit("game:start", {});
+    await waitFor(members, (c) => c.state?.game?.phase === "ROLE_REVEAL", "开下一局");
+    for (const c of members) expect(c.errors).toEqual([]);
   }, 20_000);
 });
 

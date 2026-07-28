@@ -25,7 +25,8 @@ export const GameOver = ({ game }: { game: ClientGameView }) => {
 
   const { room } = state;
   const outcome = game.outcome!;
-  const isHost = room.hostId === selfId;
+  // 观战者没资格重开 —— 桌上打牌的人才决定还打不打
+  const seated = room.seats.some((p) => p?.id === selfId);
   const blueWon = outcome.winner === "BLUE";
   const myRole = game.me ? ROLES[game.me.roleId] : null;
   // 兰斯洛特可能中途换过阵营，以终局时的阵营算胜负
@@ -70,13 +71,18 @@ export const GameOver = ({ game }: { game: ClientGameView }) => {
           <Button tone="ghost" className="flex-1" onClick={() => setReportOpen(true)}>
             看战报
           </Button>
-          {isHost ? (
-            <Button className="flex-[2]" onClick={() => emit("game:restart", { rotateFirstLeader: true })}>
+          {/*
+            **谁都能点，不只是房主。** 点了是回等待页，不是直接发牌 ——
+            座位和设置都留着，大家重新准备一次，房主再开。
+            打完一局总有人要去倒水，准备那一步就是用来等他们的。
+          */}
+          {seated ? (
+            <Button className="flex-[2]" onClick={() => emit("game:restart")}>
               再来一局
             </Button>
           ) : (
             <div className="flex-[2] self-center text-center text-sm text-ink-mute">
-              等房主开下一局
+              等他们开下一局
             </div>
           )}
         </div>

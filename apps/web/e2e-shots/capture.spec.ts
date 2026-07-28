@@ -191,6 +191,23 @@ test("拍完整一局", async ({ browser }) => {
 
   await host.getByRole("button", { name: "看战报" }).click();
   await shot(host, "终局战报");
+  await host.keyboard.press("Escape");
+  await host.waitForTimeout(400);
+
+  // ── 再来一局 ──
+  // **非房主点**：谁都能重开。点完是回等待页，不是直接发牌。
+  const other = pages[2]!;
+  await other.getByRole("button", { name: "再来一局" }).click();
+  for (const page of pages) {
+    await expect(page.getByRole("button", { name: "准备" })).toBeVisible();
+  }
+  await shot(host, "再来一局-回到等待页");
+
+  for (const page of pages) await page.getByRole("button", { name: "准备" }).click();
+  await expect(host.getByRole("button", { name: "开始游戏" })).toBeEnabled();
+  await host.getByRole("button", { name: "开始游戏" }).click();
+  await expect(host.getByText(/^\d+\/5 已看牌$/)).toBeVisible();
+  await shot(host, "再来一局-新局开始");
 
   for (const ctx of contexts) await ctx.close();
 });

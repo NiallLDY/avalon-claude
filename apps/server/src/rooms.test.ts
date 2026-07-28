@@ -14,6 +14,7 @@ import {
   leaveRoom,
   markDisconnected,
   maybeTransferHost,
+  reopenRoom,
   setReady,
   setSeatCount,
   occupants,
@@ -293,6 +294,71 @@ describe("开局条件", () => {
     expect(isInGame(r)).toBe(true);
     expect(r.game!.playerCount).toBe(7);
     expect(r.game!.phase).toBe("ROLE_REVEAL");
+  });
+});
+
+describe("再来一局", () => {
+  /** 推到终局。房间层只看 phase，不需要真把一局打完 */
+  const finished = (n = 5): Room => {
+    const r = seated(n);
+    startGame(r, "p0", T0);
+    r.game = { ...r.game!, phase: "GAME_OVER" };
+    return r;
+  };
+
+  it("退回等待页而不是直接发牌，座位和设置都留着", () => {
+    const r = finished();
+    setSettings(r, "p0", { ...DEFAULT_SETTINGS, ladyOfTheLake: false }, T0);
+    expect(reopenRoom(r, "p0", T0).ok).toBe(true);
+
+    expect(r.game).toBeNull();
+    expect(isInGame(r)).toBe(false);
+    expect(occupants(r)).toEqual(["p0", "p1", "p2", "p3", "p4"]);
+    expect(r.hostId).toBe("p0");
+    expect(r.settings.ladyOfTheLake).toBe(false);
+  });
+
+  it("准备清空，要重新确认一遍才能开", () => {
+    const r = finished();
+    expect(reopenRoom(r, "p0", T0).ok).toBe(true);
+
+    expect(startBlockedReason(r)).toContain("没准备");
+    for (let i = 0; i < 5; i++) setReady(r, `p${i}`, true, T0);
+    expect(startBlockedReason(r)).toBeNull();
+    expect(startGame(r, "p0", T0).ok).toBe(true);
+  });
+
+  it("任何在座玩家都能点，不只是房主", () => {
+    const r = finished();
+    // 一局刚打完谁都可能是第一个想继续的，卡在房主身上只会让全场干等
+    expect(reopenRoom(r, "p3", T0).ok).toBe(true);
+    expect(r.game).toBeNull();
+  });
+
+  it("观战者不能重开", () => {
+    const r = finished();
+    joinRoom(r, { id: "spec", token: "t", nick: "围观", avatar: AVATAR }, T0);
+    expect(reopenRoom(r, "spec", T0)).toMatchObject({ ok: false, error: "NOT_SEATED" });
+    expect(r.game).not.toBeNull();
+  });
+
+  it("对局进行中谁都不许把牌局掀了", () => {
+    const r = seated(5);
+    startGame(r, "p0", T0);
+    expect(reopenRoom(r, "p0", T0)).toMatchObject({ ok: false, error: "ROOM_IN_GAME" });
+    expect(r.game!.phase).toBe("ROLE_REVEAL");
+  });
+
+  it("中途掉过线的人不会卡住重开 —— 那会儿 ready 已经被清了", () => {
+    const r = finished();
+    // 手机锁一次屏、切一次后台就是一次掉线重连，markDisconnected 会清掉 ready
+    markDisconnected(r, "p2", T0);
+    joinRoom(r, { id: "p2", token: "t2", nick: "玩家2", avatar: AVATAR }, T0);
+    expect(r.players.get("p2")!.ready).toBe(false);
+
+    // 重开本来就不看 ready，回到等待页大家重新点一次就行
+    expect(reopenRoom(r, "p2", T0).ok).toBe(true);
+    expect(r.game).toBeNull();
   });
 });
 

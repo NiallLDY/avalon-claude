@@ -32,7 +32,7 @@ import {
   setSeatCount,
   requestSwap,
   respondSwap,
-  restartGame,
+  reopenRoom,
   setOptions,
   setSettings,
   shuffleSeats,
@@ -385,10 +385,13 @@ export const attachSocket = (io: IOServer, registry: Registry, store: Store): vo
       if (result.ok) pushLobby();
     });
 
-    on("game:restart", ({ rotateFirstLeader }) => {
+    on("game:restart", () => {
       const room = currentRoom(socket);
       if (!room) return;
-      reply(socket, restartGame(room, socket.data.playerId, rotateFirstLeader ?? true, now()), room);
+      const result = reopenRoom(room, socket.data.playerId, now());
+      reply(socket, result, room);
+      // 房间从「对局中」变回「等待中」，大厅列表要跟着变
+      if (result.ok) pushLobby();
     });
 
     on("game:action", ({ action }) => {

@@ -161,7 +161,7 @@ function projectFor(game: Game, viewer: PlayerId | null): ClientGameView
 | `room:options` | `{ name?, visibility?, allowSpectators? }` | 仅房主 |
 | `room:kick` / `room:transferHost` | `{ playerId }` | 仅房主 |
 | `game:start` | `{}` | 仅房主 |
-| `game:restart` | `{ rotateFirstLeader? }` | 仅房主，保留座位重新发牌 |
+| `game:restart` | `{}` | **任何在座玩家**；终局后把房间退回等待页（保留座位与设置，清空准备），不直接发牌 |
 | `game:action` | `{ action: ClientAction }` | 全部对局动作走这一个通道 |
 | `net:ping` | `{ t }` | 测延迟；`t` 是客户端时间戳，服务端原样回声。**独立限流**，不占操作配额 |
 
