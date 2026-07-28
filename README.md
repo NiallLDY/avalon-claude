@@ -146,7 +146,39 @@ cp .env.example .env
 全站上限 `MAX_ROOMS`、房主掉线移交时间 `HOST_TRANSFER_AFTER_MS`。
 完整列表见 `apps/server/src/config.ts`。
 
-### 6. 排查
+### 6. 换一台服务器
+
+```bash
+# 旧机
+./scripts/migrate.sh export ./avalon-backup.tar.gz
+scp ./avalon-backup.tar.gz 新机:/srv/avalon/
+
+# 新机（先 git clone 同一个仓库）
+./scripts/migrate.sh import ./avalon-backup.tar.gz
+```
+
+要搬的只有三样：**Redis 里的房间快照与战报**（唯一的服务端状态，没有数据库、没有上传文件）、
+`.env`、以及代码版本（脚本会记 commit，新机版本对不上会拦下来 —— 快照结构跟代码是绑定的）。
+
+**玩家身份不在服务端。** `playerId + token` 存在每台手机的 `localStorage` 里，按 origin 隔离：
+
+- **域名不变** ⇒ 迁移对玩家是无感的。断线重连会自动回房，座位、房主身份、进行中的对局都还在。
+- **换域名 ⇒ 所有人变成新玩家**，座位和房主身份全丢。这是唯一真会「丢用户」的操作，
+  跟换不换服务器没关系。真要换域名，等一局都没有的时候再换。
+
+**导出必须先停 app 再导 Redis**，脚本里就是这个顺序。房间的真相在内存里，写 Redis 有 2 秒防抖；
+app 收到 `SIGTERM` 会把所有房间立刻落盘。反过来先导后停，丢的正好是最后几秒 ——
+也就是最可能有人在操作的那几秒。
+
+入口切换：
+
+- **Cloudflare Tunnel**：同一个 tunnel token 在新机跑起来、旧机停掉即可，**不用等 DNS 生效**。
+- **DNS 直连**：提前一天把 TTL 调到 60 秒，切换当天再改指向。
+
+停机窗口就是「旧机停 app → 传备份 → 新机导入起服 → 切入口」这一段，几分钟。
+期间玩家看到的是「连接断开，正在重连」，切完自动回到原来的房间。
+
+### 7. 排查
 
 ```bash
 docker compose logs -f app        # 应用日志
