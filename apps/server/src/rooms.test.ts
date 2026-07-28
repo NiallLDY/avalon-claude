@@ -15,6 +15,8 @@ import {
   markDisconnected,
   maybeTransferHost,
   reopenRoom,
+  requestSwap,
+  respondSwap,
   setReady,
   setSeatCount,
   occupants,
@@ -22,6 +24,7 @@ import {
   roomView,
   seatOf,
   setSettings,
+  shuffleSeats,
   sit,
   stand,
   startBlockedReason,
@@ -165,17 +168,36 @@ describe("准备", () => {
     expect(startBlockedReason(r)).toContain("没准备");
   });
 
-  it("换座和起立也会清掉准备", () => {
+  it("起立只清自己的准备，别人的不动", () => {
     const r = seated(5);
     stand(r, "p4", T0);
+    expect(r.players.get("p4")!.ready).toBe(false);
+    for (const id of ["p0", "p1", "p2", "p3"]) {
+      expect(r.players.get(id)!.ready).toBe(true);
+    }
+    // 他坐回来也得自己重新点一次
     sit(r, "p4", 4, T0);
     expect(startBlockedReason(r)).toContain("没准备");
   });
 
-  it("掉线会清掉准备", () => {
+  it("别人换座不该把我的准备清掉", () => {
     const r = seated(5);
-    markDisconnected(r, "p3", T0);
-    expect(r.players.get("p3")!.ready).toBe(false);
+    requestSwap(r, "p1", "p2", T0);
+    expect(respondSwap(r, "p2", true, T0).ok).toBe(true);
+
+    // 1 号和 2 号对调了位置，我（3 号）什么都没变，凭什么要重点一次准备
+    expect(seatOf(r, "p1")).toBe(2);
+    expect(seatOf(r, "p2")).toBe(1);
+    for (const id of ["p0", "p1", "p2", "p3", "p4"]) {
+      expect(r.players.get(id)!.ready).toBe(true);
+    }
+    expect(startBlockedReason(r)).toBeNull();
+  });
+
+  it("打乱座次才清全场 —— 那是所有人都要起来挪凳子", () => {
+    const r = seated(5);
+    shuffleSeats(r, T0);
+    expect(startBlockedReason(r)).toContain("没准备");
   });
 });
 
@@ -197,6 +219,25 @@ describe("掉线与重连", () => {
     expect(seatOf(r, "p0")).toBe(0);
     expect(r.hostId).toBe("p0");
     expect(r.hostOfflineSince).toBeNull();
+  });
+
+  it("刷新一下不该把准备弄没了", () => {
+    const r = seated(5);
+    expect(startBlockedReason(r)).toBeNull();
+
+    // 刷新页面就是一次掉线重连；锁屏、切后台、换网也都是
+    markDisconnected(r, "p2", T0);
+    joinRoom(r, { id: "p2", token: "t2", nick: "玩家2", avatar: AVATAR }, T0 + 500);
+
+    expect(r.players.get("p2")!.ready).toBe(true);
+    expect(startBlockedReason(r)).toBeNull();
+  });
+
+  it("人还没回来时仍然开不了局 —— 拦他的是掉线检查，不是准备", () => {
+    const r = seated(5);
+    markDisconnected(r, "p2", T0);
+    expect(startBlockedReason(r)).toContain("掉线");
+    expect(startGame(r, "p0", T0).ok).toBe(false);
   });
 
   it("未开局的观战者掉线直接清出，免得列表越积越长", () => {
@@ -349,16 +390,15 @@ describe("再来一局", () => {
     expect(r.game!.phase).toBe("ROLE_REVEAL");
   });
 
-  it("中途掉过线的人不会卡住重开 —— 那会儿 ready 已经被清了", () => {
+  it("重开不看 ready —— 中途掉过线的人也点得动", () => {
     const r = finished();
-    // 手机锁一次屏、切一次后台就是一次掉线重连，markDisconnected 会清掉 ready
     markDisconnected(r, "p2", T0);
     joinRoom(r, { id: "p2", token: "t2", nick: "玩家2", avatar: AVATAR }, T0);
-    expect(r.players.get("p2")!.ready).toBe(false);
 
-    // 重开本来就不看 ready，回到等待页大家重新点一次就行
     expect(reopenRoom(r, "p2", T0).ok).toBe(true);
     expect(r.game).toBeNull();
+    // 回到等待页之后大家重新点一次
+    expect(startBlockedReason(r)).toContain("没准备");
   });
 });
 

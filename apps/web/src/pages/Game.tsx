@@ -16,6 +16,7 @@ import {
   type RoomView,
 } from "@avalon/shared";
 import { PlayerChips } from "../components/PlayerChip.js";
+import { ProfileButton } from "../components/Profile.js";
 import { SeatBoard } from "../components/SeatBoard.js";
 import { RoleCard } from "../components/RoleCard.js";
 import { Button, Latency, Sheet } from "../components/ui.js";
@@ -75,19 +76,16 @@ const Progress = ({ game, room }: { game: ClientGameView; room: RoomView }) => {
         第二行是白捡的空间 —— 流局标放这儿就不跟房间名抢宽度。
       */}
       <div className="flex shrink-0 flex-col items-end gap-0.5">
-        {/* 我是几号 —— 常驻，投票和讨论全程都要用 */}
-        {game.me ? (
-          <span className="flex shrink-0 items-center gap-1 rounded-md bg-ink px-1.5 py-0.5 whitespace-nowrap text-ground">
-            <span className="text-[0.6rem] leading-none opacity-70">你是</span>
-            <span className="text-[0.8rem] font-bold leading-none tabular-nums">
-              {game.me.seat + 1}号
-            </span>
-          </span>
-        ) : (
-          <span className="shrink-0 rounded-md bg-surface-2 px-1.5 py-0.5 text-[0.65rem] whitespace-nowrap text-ink-mute">
+        {/*
+          个人中心。原来这里是「你是 3 号」—— 座位区自己那格已经写着号码和「你」，
+          顶栏再写一遍是白占位置；换成头像入口，进了房就没法改昵称头像的问题也一并解决。
+        */}
+        <ProfileButton />
+        {game.me === null ? (
+          <span className="rounded bg-surface-2 px-1 text-[0.6rem] leading-[0.95rem] whitespace-nowrap text-ink-mute">
             观战
           </span>
-        )}
+        ) : null}
 
         {/*
           流局。**0 次时整个不显示** —— 常驻 5 个空点是纯噪音，

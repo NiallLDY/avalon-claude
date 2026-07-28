@@ -271,8 +271,12 @@ export const markDisconnected = (room: Room, playerId: string, now: number): voi
   const player = room.players.get(playerId);
   if (!player) return;
   player.connected = false;
-  player.ready = false;
   player.disconnectedAt = now;
+  /*
+   * **不清 ready。** 刷新一次页面就是一次掉线重连，锁屏、切后台、
+   * Wi-Fi↔4G 切换也都是 —— 每次都把准备清掉，等待页就没法用了。
+   * 真的没回来的人由 startBlockedReason 里的掉线检查拦住，那条才管用。
+   */
   if (room.hostId === playerId) room.hostOfflineSince = now;
 
   dropSwapInvolving(room, playerId);
@@ -323,9 +327,23 @@ export const leaveRoom = (room: Room, playerId: string, now: number): void => {
 
 // ──────────────────────────── 座位 ────────────────────────────
 
-/** 清掉所有人的准备。座位或规则一变就该重新确认一次，不能拿旧的准备开局 */
+/**
+ * 清掉所有人的准备。
+ *
+ * **只在「大家点准备时同意的那套东西变了」的时候用** —— 改人数、改规则、
+ * 打乱座次（线下所有人都得起来挪凳子）、开下一局。
+ *
+ * 别拿它处理单个人的座位变动：别人入座、离座、跟人换座，
+ * 都不改变我「我准备好了」这件事，全场跟着清一遍纯属折腾。
+ */
 const clearReady = (room: Room): void => {
   for (const player of room.players.values()) player.ready = false;
+};
+
+/** 清掉某一个人的准备 */
+const clearReadyOf = (room: Room, playerId: string): void => {
+  const player = room.players.get(playerId);
+  if (player) player.ready = false;
 };
 
 /** 坐到指定空位。已经坐着的人换到别的空位也走这里 */
@@ -349,7 +367,6 @@ export const sit = (
     i === seatIndex ? playerId : id === playerId ? null : id,
   );
   dropSwapInvolving(room, playerId);
-  clearReady(room);
   touch(room, now);
   return ok(undefined);
 };
@@ -359,7 +376,8 @@ export const stand = (room: Room, playerId: string, now: number): RoomResult => 
   if (!isSeated(room, playerId)) return err("NOT_SEATED");
   room.seats = room.seats.map((id) => (id === playerId ? null : id));
   dropSwapInvolving(room, playerId);
-  clearReady(room);
+  // 离座就是离席，回来要重新确认。别人的准备不受影响
+  clearReadyOf(room, playerId);
   touch(room, now);
   return ok(undefined);
 };
@@ -416,6 +434,7 @@ export const shuffleSeats = (room: Room, now: number): RoomResult => {
   const slots = Array.from({ length: room.seatCount }, () => null as string | null);
   for (const [i, id] of people.entries()) slots[i] = id;
   room.seats = slots;
+  // 打乱座次是全场都要起来挪凳子的，这一个才真该重新确认一遍
   clearReady(room);
   touch(room, now);
   return ok(undefined);
@@ -484,7 +503,8 @@ export const respondSwap = (
   const seats = [...room.seats];
   [seats[a], seats[b]] = [seats[b]!, seats[a]!];
   room.seats = seats;
-  clearReady(room);
+  // 两个人对调位置，**不动任何人的准备** —— 换座的两位刚刚才互相确认过，
+  // 其余人的处境根本没变，全场重点一遍准备是纯折腾
   touch(room, now);
   return ok(undefined);
 };

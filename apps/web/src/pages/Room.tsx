@@ -21,6 +21,7 @@ import {
   type RoleId,
 } from "@avalon/shared";
 import { Avatar } from "../components/Avatar.js";
+import { ProfileButton } from "../components/Profile.js";
 import { SeatBoard } from "../components/SeatBoard.js";
 import { Button, Latency, Segmented, Sheet, Toggle } from "../components/ui.js";
 import { labeler } from "../lib/labels.js";
@@ -138,6 +139,8 @@ export const Room = () => {
         >
           设置
         </button>
+        {/* 进了房就回不到大厅，改昵称头像的入口得在这儿也有一个 */}
+        <ProfileButton />
       </header>
 
       <SeatBoard

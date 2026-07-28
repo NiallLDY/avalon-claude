@@ -328,6 +328,37 @@ test.describe("退出房间", () => {
   });
 });
 
+test.describe("个人中心", () => {
+  test("进了房也能改昵称头像，改完桌上其他人立刻看到", async ({ browser }) => {
+    const a = await browser.newContext({ locale: "zh-CN" });
+    const b = await browser.newContext({ locale: "zh-CN" });
+    const pa = await a.newPage();
+    const pb = await b.newPage();
+
+    await openApp(pa, "阿隆");
+    const code = await createRoom(pa, "改名测试");
+    await sit(pa, 0);
+
+    await openApp(pb, "小梅");
+    await pb.getByPlaceholder("房间码").fill(code);
+    await pb.getByRole("button", { name: "进", exact: true }).click();
+    await sit(pb, 1);
+    await expect(pa.getByText("小梅")).toBeVisible();
+
+    // 进房之后回不到大厅，改名入口必须在房里就有
+    await pb.getByRole("button", { name: "我的资料" }).click();
+    const nick = pb.getByRole("dialog").getByPlaceholder("你的昵称");
+    await nick.fill("梅林本林");
+    await nick.blur();
+
+    await expect(pa.getByText("梅林本林")).toBeVisible();
+    await expect(pa.getByText("小梅")).toHaveCount(0);
+
+    await a.close();
+    await b.close();
+  });
+});
+
 test.describe("终局", () => {
   test("别人点了再来一局，我还没看完就不该被拽走", async ({ browser }) => {
     test.setTimeout(90_000);
