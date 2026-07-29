@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import { Avatar } from "../components/Avatar.js";
 import { Button } from "../components/ui.js";
+import { MatchDetail, type MatchRecord } from "./MatchDetail.js";
 import { selfId } from "../store.js";
 
 interface Stats {
@@ -36,26 +37,6 @@ interface PlayerRecord {
   nick: string;
   avatar: { seed: string; bg: string };
   stats: Stats;
-}
-
-interface MatchSeat {
-  seat: number;
-  playerId: string;
-  nick: string;
-  avatar: { seed: string; bg: string };
-  roleId: string;
-  side: string;
-  won: boolean;
-}
-
-interface MatchRecord {
-  id: string;
-  roomName: string;
-  finishedAt: number;
-  playerCount: number;
-  outcome: { winner: string; reason: string };
-  seats: MatchSeat[];
-  missions: { roundIndex: number; failCount: number; success: boolean }[];
 }
 
 const pct = (num: number, den: number): string =>
@@ -246,45 +227,7 @@ export const Leaderboard = ({ onClose }: { onClose: () => void }) => {
                     <span className="shrink-0 text-xs text-ink-mute">{open === m.id ? "收起" : "详情"}</span>
                   </button>
 
-                  {open === m.id ? (
-                    <div className="space-y-2 border-t border-line p-3">
-                      <div className="flex flex-wrap gap-1.5">
-                        {m.seats.map((s) => (
-                          <span
-                            key={s.seat}
-                            className={`flex items-center gap-1 rounded-full py-0.5 pl-0.5 pr-2
-                              ${s.side === "RED" ? "bg-red/15" : "bg-blue/15"}`}
-                          >
-                            <Avatar avatar={s.avatar} size={18} />
-                            <span className="text-[0.68rem] font-bold tabular-nums">{s.seat + 1}</span>
-                            <span className="max-w-[4rem] truncate text-[0.62rem] text-ink-mute">
-                              {s.nick}
-                            </span>
-                            <span
-                              className={`text-[0.62rem] ${s.side === "RED" ? "text-red" : "text-blue"}`}
-                            >
-                              {s.roleId}
-                            </span>
-                          </span>
-                        ))}
-                      </div>
-                      <div className="flex gap-1.5">
-                        {m.missions.map((mi) => (
-                          <span
-                            key={mi.roundIndex}
-                            className={`flex h-6 w-6 items-center justify-center rounded-full
-                              text-[0.65rem] ${mi.success ? "bg-blue text-white" : "bg-red text-white"}`}
-                            title={`第 ${mi.roundIndex + 1} 轮 · ${mi.failCount} 张失败牌`}
-                          >
-                            {mi.failCount}
-                          </span>
-                        ))}
-                      </div>
-                      <p className="text-[0.65rem] text-ink-mute">
-                        每张任务牌是谁放的不记录 —— 这局的悬案留在桌上
-                      </p>
-                    </div>
-                  ) : null}
+                  {open === m.id ? <MatchDetail match={m} /> : null}
                 </div>
               ))
             )}

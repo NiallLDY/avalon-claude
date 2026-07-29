@@ -799,3 +799,106 @@ test.describe("湖中女神", () => {
     for (const c of ctxs) await c.close();
   });
 });
+
+test.describe("对局记录", () => {
+  test("打完一局后，复盘里能看到谁投了什么票、任务结果、被刺杀的人", async ({ browser }) => {
+    test.setTimeout(150_000);
+    const ctxs = await Promise.all(
+      Array.from({ length: 5 }, () => browser.newContext({ locale: "zh-CN" })),
+    );
+    const pages = await Promise.all(ctxs.map((c) => c.newPage()));
+    for (const [i, p] of pages.entries()) await openApp(p, `记录${i + 1}`);
+
+    const host = pages[0]!;
+    const code = await createRoom(host, "复盘测试");
+    await sit(host, 0);
+    for (const [i, p] of pages.slice(1).entries()) {
+      await p.getByPlaceholder("房间码").fill(code);
+      await p.getByRole("button", { name: "进", exact: true }).click();
+      await sit(p, i + 1);
+    }
+    for (const p of pages) await p.getByRole("button", { name: "准备" }).click();
+    await host.getByRole("button", { name: "开始游戏" }).click();
+    for (const p of pages) {
+      await p.getByRole("dialog").getByRole("button", { name: /点击查看身份/ }).click();
+      await p.keyboard.press("Escape");
+      await expect(p.getByRole("dialog")).toHaveCount(0);
+    }
+
+    const dismiss = async () => {
+      for (const p of pages) {
+        const ok = p.getByRole("button", { name: "知道了" });
+        if (await ok.isVisible().catch(() => false)) await ok.click();
+      }
+      const skip = host.getByRole("button", { name: "立即继续" });
+      if (await skip.isVisible().catch(() => false)) await skip.click();
+    };
+
+    // 打到终局：三轮全成功 → 刺杀
+    for (let round = 0; round < 3; round++) {
+      await expect(host.getByText(/挑 \d+ 个人/)).toBeVisible();
+      let leader = host;
+      for (const p of pages) {
+        if ((await p.locator("main").innerText()).includes("选 ")) { leader = p; break; }
+      }
+      const need = Number((await leader.getByText(/挑 \d+ 个人/).textContent())!.match(/\d+/)![0]);
+      const seats = leader.locator("button[data-seat]:not([disabled])");
+      for (let i = 0; i < need; i++) await seats.nth(i).click();
+      await leader.getByRole("button", { name: /^确认 \d/ }).click();
+      // 故意有人投反对，复盘里才看得出票型差异
+      for (const [i, p] of pages.entries()) {
+        await p.getByRole("button", { name: i === 4 ? "反对" : "赞成" }).click();
+      }
+      await dismiss();
+      for (const p of pages) {
+        const ok = p.getByRole("button", { name: "任务成功" });
+        if (await ok.isVisible().catch(() => false)) await ok.click();
+      }
+      await dismiss();
+    }
+
+    // 刺杀
+    /*
+     * 找刺客。**不能用「页面上有"刺杀"两个字」判断** ——
+     * 阶段提示「刺客选择刺杀目标」是所有人都看得到的。
+     * 只有刺客那页有那个按钮。
+     */
+    let assassin: Page | null = null;
+    for (const p of pages) {
+      if ((await p.getByRole("button", { name: /^刺杀/ }).count()) > 0) { assassin = p; break; }
+    }
+    expect(assassin, "没找到刺客").not.toBeNull();
+    await assassin!.locator("button[data-seat]:not([disabled])").first().click();
+    await assassin!.getByRole("button", { name: /^刺杀 / }).click();
+    await expect(host.getByText(/获胜$/)).toBeVisible();
+
+    // ── 复盘 ──
+    await host.getByRole("button", { name: "退出房间" }).click();
+    await host.getByRole("button", { name: "排行榜" }).click();
+    await host.getByRole("button", { name: "对局记录" }).click();
+    // 排行榜是盖在大厅上的浮层，大厅那张同名房间卡还在 DOM 里 ——
+    // 用「蓝胜/红胜」这个只有战绩条目才有的角标区分
+    await host
+      .getByRole("button", { name: /复盘测试/ })
+      .filter({ hasText: /蓝胜|红胜/ })
+      .click();
+
+    // 阵容带身份
+    await expect(host.getByText("梅林").first()).toBeVisible();
+    // 逐轮的提名和票型 —— 这局每轮都有 4 赞成 1 反对
+    await expect(host.getByText("通过").first()).toBeVisible();
+    await expect(host.getByText(/^队长$/).first()).toBeVisible();
+    const yes = host.locator("text=✓");
+    const no = host.locator("text=✗");
+    expect(await yes.count(), "看不到赞成票").toBeGreaterThan(0);
+    expect(await no.count(), "看不到反对票").toBeGreaterThan(0);
+    // 任务结果
+    await expect(host.getByText(/任务成功 · 0 张失败牌/).first()).toBeVisible();
+    // 被刺杀的人
+    await expect(host.getByText("刺客选择了")).toBeVisible();
+    // 出牌人依然不记录
+    await expect(host.getByText(/悬案留在桌上/)).toBeVisible();
+
+    for (const c of ctxs) await c.close();
+  });
+});

@@ -278,5 +278,21 @@ test("拍完整一局", async ({ browser }) => {
   await expect(host.getByText("总胜率")).toBeVisible();
   await shot(host, "战绩");
 
+  // ── 公开排行榜 + 复盘 ──
+  await host.getByRole("button", { name: "返回" }).last().click();
+  await host.getByRole("button", { name: "排行榜" }).click();
+  // 不能等「总胜率」—— 那是榜单行里的字，没人打满门槛局数时整个榜是空的
+  await expect(host.getByText(/上榜要打满/)).toBeVisible();
+  await shot(host, "排行榜");
+  await host.getByRole("button", { name: "对局记录" }).click();
+  await shot(host, "对局记录");
+  // 浮层底下的大厅房间卡同名，用只有战绩条目才有的胜负角标区分
+  await host
+    .getByRole("button", { name: /蓝胜|红胜/ })
+    .first()
+    .click();
+  await expect(host.getByText("阵容")).toBeVisible();
+  await shot(host, "对局复盘");
+
   for (const ctx of contexts) await ctx.close();
 });
