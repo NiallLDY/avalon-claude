@@ -11,6 +11,7 @@ import { REJECT_LIMIT, type PublicPlayer } from "@avalon/shared";
 import { PlayerChip, PlayerChips } from "./PlayerChip.js";
 import { Button } from "./ui.js";
 import { useMemo } from "react";
+import { missionDeck } from "../lib/missionDeck.js";
 import { AnimatePresence, m } from "motion/react";
 import { useStore, type ResultCard } from "../store.js";
 
@@ -73,14 +74,10 @@ const MissionCards = ({
 }: {
   card: Extract<ResultCard, { kind: "MISSION" }>;
 }) => {
-  const faces = useMemo(() => {
-    const deck = Array.from({ length: card.team.length }, (_, i) => i < card.failCount);
-    for (let i = deck.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [deck[i], deck[j]] = [deck[j]!, deck[i]!];
-    }
-    return deck;
-  }, [card.id, card.failCount, card.team.length]);
+  const faces = useMemo(
+    () => missionDeck(card.team.length, card.failCount),
+    [card.id, card.failCount, card.team.length],
+  );
 
   return (
     <div className="mt-3 flex justify-center gap-1.5">
