@@ -15,9 +15,12 @@ import { m } from "motion/react";
 import { EMOTES, REACTIONS, REACTION_META, type Reaction } from "@avalon/shared";
 
 interface Anchor {
-  /** 相对棋盘容器的位置（头像中心） */
+  /** 相对棋盘容器的位置。**量的是头像中心**，不是整个座位格 —— 格子里还有号牌和昵称，
+   *  拿格子中心当锚点浮层会偏下一截 */
   readonly x: number;
   readonly y: number;
+  /** 头像半宽 + 间距。头像尺寸随人数缩，所以这个值是量出来的 */
+  readonly gap: number;
   /** 座位在左列还是右列 —— 浮层朝中间弹，别飞出屏幕 */
   readonly side: "left" | "right";
 }
@@ -43,8 +46,8 @@ const Panel = ({
       style={{
         top: anchor.y,
         ...(anchor.side === "left"
-          ? { left: anchor.x + 26 }
-          : { right: `calc(100% - ${anchor.x - 26}px)` }),
+          ? { left: anchor.x + anchor.gap }
+          : { right: `calc(100% - ${anchor.x - anchor.gap}px)` }),
         transform: "translateY(-50%)",
       }}
     >

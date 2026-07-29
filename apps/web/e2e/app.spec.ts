@@ -317,7 +317,7 @@ test.describe("退出房间", () => {
     await quitter.getByRole("button", { name: "退出" }).click();
     // 对局中退出要先确认 —— 座位会保留，这件事必须说清楚
     await expect(quitter.getByText(/座位会一直留着/)).toBeVisible();
-    await quitter.getByRole("button", { name: "离开" }).click();
+    await quitter.getByRole("button", { name: "我自己离开" }).click();
 
     // 之前这里什么都不会发生：客户端本地状态没清，一直停在对局页
     await expect(quitter.getByRole("button", { name: "开房间" })).toBeVisible();
@@ -573,13 +573,32 @@ test.describe("扔东西和表情包", () => {
     await expect(host.locator('[data-toss="EGG"]')).toHaveCount(1);
 
     /*
-     * 落地效果必须**真的出现**。
-     * 之前收摊挂在抛射动画上：抛射一结束就把整条 reaction 删了，
-     * 落地那一下只有几十毫秒的命，还在 opacity 0 —— Safari 上根本看不到。
-     * 这条断言就是钉住那个竞态。
+     * 逐帧采样，验两件事 —— 截图对不准这种时间点，只能在页面里量：
+     *
+     * 1. **落地效果真的显现过。** 之前收摊挂在抛射动画上，抛射一结束
+     *    就把整条 reaction 删了，落地那一下只有几十毫秒的命且还在
+     *    opacity 0 —— WebKit 上永远看不到。
+     * 2. **抛射物落地就消失。** 不淡掉的话，鸡蛋会一直杵在对方脸上，
+     *    等落地效果放完了它还在，看起来就是「先炸开又冒出个蛋」。
      */
-    await expect(host.locator('[data-toss-hit="EGG"]')).toHaveCount(1);
-    await expect(host.locator('[data-toss-hit="EGG"]')).toBeVisible();
+    const trace = await host.evaluate(async () => {
+      const frames: { fly: number; hit: number }[] = [];
+      for (let i = 0; i < 24; i++) {
+        const read = (sel: string) => {
+          const el = document.querySelector(sel);
+          return el ? Number(getComputedStyle(el).opacity) : 0;
+        };
+        frames.push({ fly: read("[data-toss]"), hit: read("[data-toss-hit]") });
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      return frames;
+    });
+
+    expect(Math.max(...trace.map((f) => f.hit)), "落地效果从没显现过").toBeGreaterThan(0.7);
+    expect(Math.max(...trace.map((f) => f.fly)), "抛射物从没显现过").toBeGreaterThan(0.7);
+    // 交接：不该有哪一帧两个都还很实
+    const overlap = trace.filter((f) => f.fly > 0.6 && f.hit > 0.6);
+    expect(overlap, "抛射物落地后没消失，和落地效果同时杵着").toHaveLength(0);
 
     // 放完了自己收摊
     await expect(host.locator("[data-toss]")).toHaveCount(0, { timeout: 4000 });

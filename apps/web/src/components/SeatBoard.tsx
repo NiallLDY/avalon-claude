@@ -47,6 +47,8 @@ const IMPACT = {
 
 const FLY_MS = 0.55;
 const IMPACT_MS = 0.45;
+/** 落地后抛射物淡出的时间。和落地效果的起点重叠，看着像「砸碎了」 */
+const FADE_MS = 0.14;
 /** 连发里第 i 个的出发延迟 */
 const stagger = (i: number) => i * 0.09;
 
@@ -88,7 +90,9 @@ const Toss = ({
             // 三个关键帧：起点 → 抬到峰值 → 落到目标。times 让峰值卡在 45%
             y: [0, flight.dy * 0.42 - flight.arc, flight.dy + jitter * 0.3],
             scale: [0.5, 1.25, 1],
-            opacity: [0, 1, 1],
+            // 末尾那个 0 是关键：**落地就消失**。
+            // 不淡掉的话，水桶会一直杵在目标身上，水滴在它头上炸完了它还在
+            opacity: [0, 1, 1, 0],
             rotate: flight.spin,
           }}
           exit={{ opacity: 0, scale: 0.8 }}
@@ -99,7 +103,13 @@ const Toss = ({
             x: { duration: FLY_MS, delay, ease: "linear" },
             y: { duration: FLY_MS, delay, times: [0, 0.45, 1], ease: "easeOut" },
             rotate: { duration: FLY_MS, delay, ease: "linear" },
-            opacity: { duration: FLY_MS, delay, times: [0, 0.1, 1] },
+            // 比飞行多 FADE_MS：飞完了才开始淡，正好和落地效果交接
+            opacity: {
+              duration: FLY_MS + FADE_MS,
+              delay,
+              times: [0, 0.08, FLY_MS / (FLY_MS + FADE_MS), 1],
+              ease: "linear",
+            },
           }}
         >
           {REACTION_META[flight.kind].emoji}
@@ -166,7 +176,12 @@ interface Props {
    * 位置知识在这里，内容知识在页面里。
    */
   readonly menuSeat?: number | null;
-  readonly renderMenu?: (anchor: { x: number; y: number; side: "left" | "right" }) => React.ReactNode;
+  readonly renderMenu?: (anchor: {
+    x: number;
+    y: number;
+    gap: number;
+    side: "left" | "right";
+  }) => React.ReactNode;
   /** 两列中间的内容 */
   readonly children?: React.ReactNode;
 }
@@ -353,11 +368,6 @@ export const SeatBoard = ({
               type="button"
               /* e2e 用它选座位按钮。别再用布局类当选择器 —— 换个排布就全断 */
               data-seat={seat}
-              ref={(el) => {
-                // 花和蛋要按真实距离飞，得留着这个位置
-                if (el) seatEls.current.set(seat, el);
-                else seatEls.current.delete(seat);
-              }}
               disabled={!canSelect && !canReact}
               onClick={() => (canSelect ? onSelect?.(seat) : onReact?.(seat))}
               style={cell(seat)}
@@ -366,7 +376,19 @@ export const SeatBoard = ({
                 ${canSelect || canReact ? "active:scale-95" : "pointer-events-none"}
                 ${isSelected ? "bg-gold/15 ring-2 ring-gold" : ""}`}
             >
-              <span className="relative">
+              {/*
+                量的是**头像本身**，不是整个座位格。
+                格子里还有号牌和昵称，它的中心落在头像下方 ——
+                拿格子当锚点的话，扔过来的东西会砸在下巴上，
+                点头像弹出的浮层也会偏下一截。
+              */}
+              <span
+                className="relative"
+                ref={(el) => {
+                  if (el) seatEls.current.set(seat, el);
+                  else seatEls.current.delete(seat);
+                }}
+              >
                 <Avatar
                   avatar={player.avatar}
                   size={size}
@@ -546,6 +568,9 @@ export const SeatBoard = ({
               return renderMenu({
                 x: a.left - b.left + a.width / 2,
                 y: a.top - b.top + a.height / 2,
+                // 让浮层贴着头像边缘，而不是压在上面。
+                // 头像尺寸随人数缩（48/42/36），所以这个间距得量，不能写死
+                gap: a.width / 2 + 8,
                 side: menuSeat < rows ? "left" : "right",
               });
             })()

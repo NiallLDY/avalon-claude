@@ -144,11 +144,12 @@ test("拍完整一局", async ({ browser }) => {
         await bystander.keyboard.press("Escape");
       }
       await shot(bystander, "扔东西-菜单");
-      await bystander.getByRole("button", { name: "砸蛋" }).click();
-      // 飞行 0.7s。shot 自己会先等 250ms，所以第二张只需再补 300ms 就落在砸中那一瞬
-      await shot(host, "献花砸蛋-飞在半路");
-      await host.waitForTimeout(300);
-      await shot(host, "献花砸蛋-砸中");
+      // 泼水最能看出问题：桶该消失、水滴该出现，两个不能同时在
+      await bystander.getByRole("button", { name: "泼水" }).click();
+      await shot(host, "投掷-飞在半路");
+      // 飞行 0.55s，shot 自带 250ms 等待，再补 400ms 正好落在落地效果里
+      await host.waitForTimeout(400);
+      await shot(host, "投掷-落地");
 
       // 左右两列各发一个表情包，验气泡是不是朝屏幕中间弹的
       for (const seat of [0, pages.length - 1]) {
@@ -271,7 +272,7 @@ test("拍完整一局", async ({ browser }) => {
   await expect(host.getByRole("dialog")).toHaveCount(0);
   // 对局页退出要走确认
   await host.getByRole("button", { name: "退出", exact: true }).click();
-  await host.getByRole("button", { name: "离开", exact: true }).click();
+  await host.getByRole("button", { name: "我自己离开" }).click();
   await expect(host.getByRole("button", { name: "开房间" })).toBeVisible();
   await host.getByRole("button", { name: "我的战绩" }).click();
   await expect(host.getByText("总胜率")).toBeVisible();
