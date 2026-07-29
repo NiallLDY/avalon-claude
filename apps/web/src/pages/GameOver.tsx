@@ -36,11 +36,14 @@ export const GameOver = ({ game }: { game: ClientGameView }) => {
     <div className="flex h-full min-h-0 flex-col safe-top safe-bottom">
       <header className="shrink-0 px-4 pt-3 text-center">
         <p
-          className={`font-display text-3xl tracking-widest ${blueWon ? "text-blue" : "text-red"}`}
+          className={`slam sweep font-display text-3xl tracking-widest
+            ${blueWon ? "text-blue" : "text-red"}`}
         >
           {blueWon ? "正义获胜" : "邪恶获胜"}
         </p>
-        <p className="mt-1 text-xs text-ink-mute">{REASON[outcome.reason] ?? ""}</p>
+        <p className="rise-in mt-1 text-xs text-ink-mute" style={{ animationDelay: "0.3s" }}>
+          {REASON[outcome.reason] ?? ""}
+        </p>
         {outcome.assassinatedSeat !== null ? (
           <p className="mt-0.5 text-xs text-ink-mute">
             刺客选择了 {labeler(room.seats).full(outcome.assassinatedSeat)}

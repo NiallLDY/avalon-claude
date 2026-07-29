@@ -10,6 +10,7 @@
 import { REJECT_LIMIT, type PublicPlayer } from "@avalon/shared";
 import { PlayerChip, PlayerChips } from "./PlayerChip.js";
 import { Button } from "./ui.js";
+import { useMemo } from "react";
 import { useStore, type ResultCard } from "../store.js";
 
 /**
@@ -26,13 +27,55 @@ export const ResultOverlay = () => {
   if (!card) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-6">
-      <div className="w-full max-w-sm rounded-2xl border border-line bg-surface p-5 text-center">
+    <div className="backdrop-in fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-6">
+      <div
+        /* 换一张结果卡就重新挂载，入场动画重放一次 */
+        key={card.id}
+        className="overlay-in w-full max-w-sm rounded-2xl border border-line bg-surface p-5 text-center"
+      >
         <Body card={card} seated={seated} />
         <Button className="mt-5 w-full" onClick={dismiss}>
           知道了
         </Button>
       </div>
+    </div>
+  );
+};
+
+/**
+ * 任务牌逐张翻开。
+ *
+ * **顺序是打乱的，牌面不对应任何人。** 这个动画唯一的作用是把
+ * 「几张失败牌」演出来 —— 任何能让人反推出谁出了什么的编排都不能做，
+ * 所以既不按座位顺序排，也不在牌上留任何标识。
+ */
+const MissionCards = ({
+  card,
+}: {
+  card: Extract<ResultCard, { kind: "MISSION" }>;
+}) => {
+  const faces = useMemo(() => {
+    const deck = Array.from({ length: card.team.length }, (_, i) => i < card.failCount);
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [deck[i], deck[j]] = [deck[j]!, deck[i]!];
+    }
+    return deck;
+  }, [card.id, card.failCount, card.team.length]);
+
+  return (
+    <div className="mt-3 flex justify-center gap-1.5">
+      {faces.map((failed, i) => (
+        <span
+          key={i}
+          className={`card-flip flex h-12 w-9 items-center justify-center rounded-lg
+            border text-lg
+            ${failed ? "border-red/60 bg-red/20 text-red" : "border-blue/50 bg-blue/15 text-blue"}`}
+          style={{ animationDelay: `${0.2 + i * 0.14}s` }}
+        >
+          {failed ? "✗" : "✓"}
+        </span>
+      ))}
     </div>
   );
 };
@@ -61,7 +104,7 @@ const Body = ({
           {yes} 票赞成 · {card.votes.length - yes} 票反对
         </p>
 
-        <div className="mt-4 space-y-3 text-left">
+        <div className="rise-in mt-4 space-y-3 text-left" style={{ animationDelay: "0.24s" }}>
           <div>
             <p className="mb-1.5 text-xs text-ink-mute">这一车</p>
             <PlayerChips seated={seated} seats={card.team} tone="gold" />
@@ -95,17 +138,18 @@ const Body = ({
   if (card.kind === "MISSION") {
     return (
       <>
-        <p className={`font-display text-3xl ${card.success ? "text-blue" : "text-red"}`}>
+        <p className={`slam font-display text-3xl ${card.success ? "text-blue" : "text-red"}`}>
           {card.success ? "任务成功" : "任务失败"}
         </p>
-        <p className="mt-1 text-sm text-ink-soft">
+        <MissionCards card={card} />
+        <p className="rise-in mt-1 text-sm text-ink-soft" style={{ animationDelay: "0.9s" }}>
           {card.failCount === 0
             ? "没有人放失败牌"
             : `${card.failCount} 张失败牌`}
           {card.failsRequired === 2 ? "（这一轮要 2 张才算失败）" : ""}
         </p>
 
-        <div className="mt-4 text-left">
+        <div className="rise-in mt-4 text-left" style={{ animationDelay: "1s" }}>
           <p className="mb-1.5 text-xs text-ink-mute">执行这次任务的是</p>
           <PlayerChips seated={seated} seats={card.team} tone="gold" />
         </div>
@@ -117,7 +161,7 @@ const Body = ({
 
   return (
     <>
-      <p className="font-display text-3xl text-gold">忠诚牌</p>
+      <p className="slam font-display text-3xl text-gold">忠诚牌</p>
       <p className="mt-3 text-sm text-ink-soft">
         {card.swapped === null
           ? "翻开了一张，内容不公开"

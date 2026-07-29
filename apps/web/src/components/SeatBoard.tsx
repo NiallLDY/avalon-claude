@@ -271,7 +271,9 @@ export const SeatBoard = ({
                   avatar={player.avatar}
                   size={size}
                   dim={!player.connected}
-                  className={`${onTeam ? "ring-2 ring-gold" : ""}
+                  /* key 带上提名次数：每次新队伍成型都重新脉冲一次 */
+                  key={onTeam ? `team-${game?.proposals.length}-${game?.attempt}` : "idle"}
+                  className={`${onTeam ? "team-pulse rounded-full ring-2 ring-gold" : ""}
                     ${shaken ? "reaction-shake" : ""}`}
                 />
 
@@ -289,7 +291,12 @@ export const SeatBoard = ({
                     </span>
                   ) : null
                 ) : isLeader ? (
-                  <span className="absolute -top-2 -left-1.5 text-sm drop-shadow" title="队长">
+                  <span
+                    /* key 跟着队长走：换人就重新挂载，冠冕重新落一次 */
+                    key={`crown-${game?.leaderSeat}`}
+                    className="crown-drop absolute -top-2 -left-1.5 text-sm drop-shadow"
+                    title="队长"
+                  >
                     👑
                   </span>
                 ) : null}
@@ -300,8 +307,10 @@ export const SeatBoard = ({
                 {/* 投票揭晓：同时公开所有人的票 */}
                 {revealed !== undefined ? (
                   <span
-                    className={`absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center
-                      rounded-full text-[0.7rem] font-bold text-white ring-2 ring-ground
+                    /* 每次揭票重新挂载，票才会重新翻一次 */
+                    key={`vote-${game?.proposals.length}`}
+                    className={`vote-flip absolute -bottom-1 -right-1 flex h-5 w-5 items-center
+                      justify-center rounded-full text-[0.7rem] font-bold text-white ring-2 ring-ground
                       ${revealed ? "bg-blue" : "bg-red"}`}
                   >
                     {revealed ? "✓" : "✗"}
@@ -315,8 +324,10 @@ export const SeatBoard = ({
                     **只说做没做，不说做了什么。**
                   */
                   <span
-                    className={`absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center
-                      rounded-full text-[0.7rem] leading-none font-bold ring-2 ring-ground
+                    key={`act-${act}`}
+                    className={`${act === "done" ? "badge-pop" : ""} absolute -bottom-1 -right-1
+                      flex h-5 w-5 items-center justify-center rounded-full text-[0.7rem]
+                      leading-none font-bold ring-2 ring-ground
                       ${act === "done"
                         ? "bg-green text-white"
                         : "border border-dashed border-ink-mute bg-surface-2 text-ink-mute"}`}

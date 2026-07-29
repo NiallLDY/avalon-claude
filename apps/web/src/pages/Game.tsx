@@ -38,8 +38,10 @@ const Progress = ({ game, room }: { game: ClientGameView; room: RoomView }) => {
           const current = round === game.roundIndex && !done;
           return (
             <span
-              key={round}
+              /* key 带上结果：刚结算完那一轮会重新挂载，敲一下 */
+              key={`${round}-${done ? (done.success ? "s" : "f") : "pending"}`}
               className={`relative flex h-6 w-6 items-center justify-center rounded-full text-[0.7rem]
+                ${done && round === game.missions.length - 1 ? "dot-resolve" : ""}
                 ${done ? (done.success ? "bg-blue text-white" : "bg-red text-white") : ""}
                 ${current ? "ring-2 ring-gold text-gold" : ""}
                 ${!done && !current ? "bg-surface-2 text-ink-mute" : ""}`}
@@ -299,7 +301,9 @@ export const Game = () => {
           <ActingStatus game={game} />
         ) : waitingText() ? (
           <p
-            className={`text-lg font-medium ${
+            /* 换阶段时重新挂载，文字淡进来而不是硬切 */
+            key={`${phase}-${game.missions.length}-${game.proposals.length}`}
+            className={`phase-in text-lg font-medium ${
               phase === "MISSION_RESULT"
                 ? game.missions.at(-1)?.success
                   ? "text-blue"

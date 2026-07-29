@@ -285,3 +285,235 @@
 @utility emote-pop {
   animation: emote-pop 2.6s ease-out both;
 }
+
+/* ══════════════════════════════════════════════════════════════
+ * 对局动效。
+ *
+ * 原则：**只给「刚发生了什么」加动画**，不给「一直是什么」加。
+ * 常驻元素动起来会一直抢注意力；一次性的变化才需要被看见。
+ *
+ * 每条动画都挂在一个会变的 React key 上重新挂载来触发 ——
+ * 靠 CSS 类切换在 React 里重放动画是不可靠的。
+ * ══════════════════════════════════════════════════════════════ */
+
+/** 通用入场：淡入 + 轻微上浮。给弹窗内容分层用 */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@utility rise-in {
+  animation: rise-in 0.28s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+/** 弹窗整体入场。比 rise-in 重一点，因为它盖住了整个屏幕 */
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+@utility overlay-in {
+  animation: overlay-in 0.3s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@utility backdrop-in {
+  animation: backdrop-in 0.2s ease-out both;
+}
+
+/**
+ * 结论大字砸下来。**过冲再回弹** ——
+ * 匀速放大看着像加载动画，砸一下才有「结果出来了」的重量。
+ */
+@keyframes slam {
+  0% {
+    opacity: 0;
+    transform: scale(1.5);
+    letter-spacing: 0.3em;
+  }
+  60% {
+    opacity: 1;
+    transform: scale(0.94);
+    letter-spacing: 0.02em;
+  }
+  100% {
+    transform: scale(1);
+    letter-spacing: 0.05em;
+  }
+}
+@utility slam {
+  animation: slam 0.42s cubic-bezier(0.2, 1.2, 0.4, 1) both;
+}
+
+/**
+ * 投票揭晓：所有人的票**同时**翻面。
+ * 不做错开的 stagger —— 规则就是同时公开，错开会让人以为有先后。
+ */
+@keyframes vote-flip {
+  0% {
+    transform: rotateY(90deg) scale(0.6);
+    opacity: 0;
+  }
+  55% {
+    transform: rotateY(-12deg) scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: rotateY(0) scale(1);
+  }
+}
+@utility vote-flip {
+  animation: vote-flip 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  backface-visibility: hidden;
+}
+
+/** 角标弹入。「他动了」这种小状态变化，弹一下就够 */
+@keyframes badge-pop {
+  0% {
+    transform: scale(0);
+  }
+  70% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@utility badge-pop {
+  animation: badge-pop 0.26s cubic-bezier(0.3, 1.4, 0.5, 1) both;
+}
+
+/**
+ * 上车高亮。队伍刚定下来时脉冲两下就停 ——
+ * 一直呼吸会在整个投票阶段持续抢眼睛。
+ */
+@keyframes team-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(216 179 106 / 0);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgb(216 179 106 / 0.35);
+  }
+}
+@utility team-pulse {
+  animation: team-pulse 0.7s ease-out 2;
+}
+
+/**
+ * 任务牌逐张翻开。**顺序是打乱的，牌面也不对应任何人** ——
+ * 这个动画唯一的作用是把「几张失败牌」演出来，
+ * 任何能让人推出谁出了什么的编排都不能做。
+ */
+@keyframes card-flip {
+  0% {
+    transform: rotateY(180deg) translateY(8px);
+  }
+  100% {
+    transform: rotateY(0) translateY(0);
+  }
+}
+@utility card-flip {
+  animation: card-flip 0.4s cubic-bezier(0.3, 0.9, 0.3, 1) both;
+  transform-style: preserve-3d;
+}
+
+/** 任务进度点刚出结果时敲一下 */
+@keyframes dot-resolve {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.45);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@utility dot-resolve {
+  animation: dot-resolve 0.45s cubic-bezier(0.3, 1.2, 0.4, 1) both;
+}
+
+/** 队长冠换人时落下来 */
+@keyframes crown-drop {
+  0% {
+    transform: translateY(-10px) rotate(-25deg);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(2px) rotate(6deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+}
+@utility crown-drop {
+  animation: crown-drop 0.4s cubic-bezier(0.3, 1.3, 0.5, 1) both;
+}
+
+/** 阶段中心文字换的时候淡进来，别硬切 */
+@keyframes phase-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@utility phase-in {
+  animation: phase-in 0.24s ease-out both;
+}
+
+/** 终局横幅：一道光扫过去 */
+@keyframes sweep {
+  from {
+    background-position: -140% 0;
+  }
+  to {
+    background-position: 240% 0;
+  }
+}
+@utility sweep {
+  background-image: linear-gradient(
+    100deg,
+    transparent 35%,
+    rgb(255 255 255 / 0.55) 50%,
+    transparent 65%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  animation: sweep 1.5s ease-in-out 0.35s 2;
+}
+
+/**
+ * 关掉动画的人一律尊重。
+ * 前庭功能敏感的人看这种缩放/位移会真的不舒服，不是偏好问题。
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
