@@ -19,6 +19,7 @@ Melbourne 阿瓦隆 —— 线下面对面玩阿瓦隆时使用的**在线发牌
 | `packages/shared` | 常量表、角色元数据、客户端类型、画风注册表；Zod schema 在 `@avalon/shared/schemas` 子入口（**只有服务端 import**，别打进前端） |
 | `packages/engine` | `setup` 发牌 / `vision` 视野 / `machine` 状态机 / `projection` 视图裁剪 |
 | `apps/server` | Fastify + Socket.IO + Redis 快照 + 限流 |
+| `apps/server/src/records.ts` | 玩家档案 + 对局归档 + 排行榜。**唯一持久化的东西**，只在 GAME_OVER 之后写 |
 | `apps/web` | React 单屏客户端，PWA。规则页是**唯一允许滚动**的页面 |
 | `assets/roles/` | 角色卡插画，生成流水线见 `scripts/art/` |
 

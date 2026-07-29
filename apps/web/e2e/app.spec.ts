@@ -603,8 +603,8 @@ test.describe("排行榜", () => {
     await openApp(page);
     await page.getByRole("button", { name: "排行榜" }).click();
 
-    // 没人打满局数时要说清楚为什么是空的，不能只给个空列表
-    await expect(page.getByText(/还没有人打满 \d+ 局/)).toBeVisible();
+    // 别断言「库是空的」—— 同一次 e2e 里前面的用例可能已经打完过局。
+    // 要验的是**页面本身**：口径说明和身份提示在任何数据状态下都必须在
     // 每个指标都得有口径说明
     await expect(page.getByText(/你当队长、车通过了，车上有红方的比例/)).toBeVisible();
     await expect(page.getByText(/你投反对的车里，确实有红方的比例/)).toBeVisible();
@@ -612,7 +612,10 @@ test.describe("排行榜", () => {
     await expect(page.getByText(/清了浏览器数据或换设备/)).toBeVisible();
 
     await page.getByRole("button", { name: "对局记录" }).click();
-    await expect(page.getByText("还没有打完的对局")).toBeVisible();
+    // 有数据就该列出来，没数据就该说清楚，两者必居其一
+    await expect(
+      page.getByText("还没有打完的对局").or(page.getByRole("button", { name: /详情|收起/ }).first()),
+    ).toBeVisible();
 
     await page.getByRole("button", { name: "← 返回" }).click();
     await expect(page.getByRole("button", { name: "开房间" })).toBeVisible();
