@@ -24,8 +24,8 @@ const settings = (over: Partial<GameSettings> = {}): GameSettings => ({
   leaderRotation: "CLOCKWISE",
   rejectCounting: "PER_ROUND",
   loyaltyFlipTiming: "NORMAL",
-  loyaltySwapChance: 0.33,
   hideLoyaltyFlipResult: false,
+  lancelotsKnowEachOther: false,
   ...over,
 });
 

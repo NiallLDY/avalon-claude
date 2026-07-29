@@ -50,6 +50,7 @@ export const RoleCard = ({
   const hasIntel =
     me.vision.evilSeats.length > 0 ||
     me.vision.merlinCandidates.length > 0 ||
+    me.vision.counterpartSeat !== null ||
     me.myLadyChecks.length > 0;
 
   return (
@@ -138,6 +139,25 @@ export const RoleCard = ({
                   <span className="text-red">莫甘娜</span>
                 </p>
                 <PlayerChips seated={seated} seats={me.vision.merlinCandidates} tone="gold" />
+              </div>
+            ) : null}
+
+            {me.vision.counterpartSeat !== null ? (
+              <div className="space-y-1.5">
+                {/*
+                  「另一位兰斯洛特」而不是「他是红方」—— 两人换边是同步的，
+                  所以他永远站在你的对面，但这句话说的是关系，不是当下的阵营。
+                */}
+                <p className="text-xs text-ink-mute">
+                  另一位兰斯洛特（永远和你<span className="text-ink">相反</span>）
+                </p>
+                <PlayerChips
+                  seated={seated}
+                  seats={[me.vision.counterpartSeat]}
+                  tone="gold"
+                  showNick={false}
+                  markOf={() => "兰"}
+                />
               </div>
             ) : null}
 

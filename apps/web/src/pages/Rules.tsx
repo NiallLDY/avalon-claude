@@ -227,6 +227,9 @@ export const Rules = ({ onClose }: { onClose: () => void }) => {
                 <span className="text-ink">兰斯洛特</span>（{LANCELOT_MIN_PLAYERS} 人及以上）——
                 两边各一个兰斯洛特，翻忠诚牌时可能互换阵营。视野在开局就冻结了，不会跟着换。
                 这个模式里没有刺客，刺杀由莫甘娜执行。
+                忠诚牌堆里只有 2 张「阵营转换」，所以一局最多换 2 次；剩下的都是空白牌。
+                房主还能开「兰斯洛特互认」，开了之后两个兰斯洛特开局就知道对方是谁 ——
+                官方说人多的时候才推荐。
               </p>
               <p>
                 <span className="text-ink">提前刺杀</span> ——

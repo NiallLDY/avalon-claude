@@ -216,7 +216,71 @@ describe("computeVision · 无视野角色", () => {
           evilSeats: [],
           merlinCandidates: [],
           lancelotSeats: [],
+          counterpartSeat: null,
         });
+      }
+    });
+  });
+});
+
+/**
+ * 官方 Lancelot promo 变体 #3。默认是**不互认**（变体 #1/#2 的揭示阶段
+ * 只让红兰伸拇指给红方认，两位兰斯洛特彼此并不知情），所以这里既要验开了之后
+ * 认得到，也要验没开时一个字都不多给。
+ */
+describe("computeVision · 兰斯洛特互认（变体 #3）", () => {
+  const lancelotSeatsOf = (roles: readonly RoleId[]) =>
+    roles.flatMap((r, seat) => (ROLES[r].isLancelot ? [seat] : []));
+
+  it("开了之后，两位兰斯洛特互相认得对方，且只多知道这一件事", () => {
+    forEveryDeal(({ roles, mode, label }) => {
+      if (mode !== "LANCELOT") return;
+      const vision = computeVision(roles, seededRng([1]), { lancelotsKnowEachOther: true });
+      const [a, b] = lancelotSeatsOf(roles) as [number, number];
+
+      expect(vision[a]!.counterpartSeat, `${label} 蓝/红兰@${a}`).toBe(b);
+      expect(vision[b]!.counterpartSeat, `${label} 蓝/红兰@${b}`).toBe(a);
+      // 除了对家，兰斯洛特依旧什么都不知道
+      for (const seat of [a, b]) {
+        expect(vision[seat]!.evilSeats, `${label} @${seat}`).toEqual([]);
+        expect(vision[seat]!.merlinCandidates, `${label} @${seat}`).toEqual([]);
+        expect(vision[seat]!.lancelotSeats, `${label} @${seat}`).toEqual([]);
+      }
+    });
+  });
+
+  it("开了之后，别人的视野一个字都不变", () => {
+    forEveryDeal(({ roles, mode, label }) => {
+      if (mode !== "LANCELOT") return;
+      const off = computeVision(roles, seededRng([1]), { lancelotsKnowEachOther: false });
+      const on = computeVision(roles, seededRng([1]), { lancelotsKnowEachOther: true });
+      const lancelots = new Set(lancelotSeatsOf(roles));
+      for (const seat of roles.keys()) {
+        if (lancelots.has(seat)) continue;
+        expect(on[seat], `${label} @${seat} ${roles[seat]}`).toEqual(off[seat]);
+      }
+    });
+  });
+
+  it("默认（不传 settings / 关着）谁都不认识对家", () => {
+    forEveryDeal(({ roles, label }) => {
+      for (const v of [
+        computeVision(roles, seededRng([1])),
+        computeVision(roles, seededRng([1]), { lancelotsKnowEachOther: false }),
+      ]) {
+        for (const seat of roles.keys()) {
+          expect(v[seat]!.counterpartSeat, `${label} @${seat}`).toBeNull();
+        }
+      }
+    });
+  });
+
+  it("标准模式没有兰斯洛特，开了也不该凭空造出对家", () => {
+    forEveryDeal(({ roles, mode, label }) => {
+      if (mode !== "STANDARD") return;
+      const vision = computeVision(roles, seededRng([1]), { lancelotsKnowEachOther: true });
+      for (const seat of roles.keys()) {
+        expect(vision[seat]!.counterpartSeat, `${label} @${seat}`).toBeNull();
       }
     });
   });

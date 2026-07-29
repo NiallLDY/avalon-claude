@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { TEAM_SIZE, type Avatar } from "@avalon/shared";
+import { TEAM_SIZE, type Avatar, type ClientAction } from "@avalon/shared";
 import { createRecords, type MatchRecord } from "./records.js";
 import {
   applyAction,
@@ -90,7 +90,7 @@ const playToGameOver = (): Room => {
   }
   expect(startGame(room, "p0", T0).ok).toBe(true);
 
-  const act = (seat: number, action: Parameters<typeof applyAction>[2]) => {
+  const act = (seat: number, action: ClientAction) => {
     const r = applyAction(room, `p${seat}`, action, T0);
     expect(r.ok, `座位 ${seat} 的 ${action.type} 被拒：${r.ok ? "" : r.error}`).toBe(true);
   };
@@ -108,7 +108,7 @@ const playToGameOver = (): Room => {
     const team = round === 1 ? [evilSeat] : [];
     for (const s of SEATS) if (team.length < size && !team.includes(s)) team.push(s);
 
-    act(g().leaderSeat, { type: "PROPOSE_TEAM", team });
+    act(g().leaderSeat, { type: "PROPOSE_TEAM", team, speakDirection: null });
     for (const i of SEATS) act(i, { type: "VOTE", approve: true });
     act(0, { type: "ADVANCE" });
     for (const s of team) act(s, { type: "PLAY_CARD", success: s !== evilSeat });

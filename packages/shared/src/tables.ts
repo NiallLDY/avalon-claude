@@ -116,27 +116,38 @@ export const LADY_MIN_PLAYERS = 7;
 export const EARLY_ASSASSINATION_UNLOCK_MISSIONS = 2;
 
 /**
- * 兰斯洛特忠诚牌翻牌时机。GAME.md §8.3
+ * 兰斯洛特忠诚牌。GAME.md §8.2 / §8.3
+ *
+ * **牌堆是固定构成的，不是每张独立掷骰。** 官方 Lancelot promo 明确写了
+ * 牌堆张数与「阵营转换」张数（两个变体都是 2 张转换牌），所以一局最多换 2 次，
+ * 而且已经翻掉的牌会影响后面的概率 —— 前两张都翻出转换牌，后面就必然是空白。
+ * 用独立概率模拟会丢掉这层耦合，也可能一局连换 3 次以上。
+ *
+ * `blanks + swaps` 是牌堆总张数，`afterRounds`（+ beforeFirstMission）决定
+ * 实际翻几张 —— 官方变体 #1 是 5 张里翻 3 张，剩下 2 张永远不揭。
  * afterRounds 的值是 roundIndex（0-based）。
  */
 export const LOYALTY_FLIP_SCHEDULE = {
-  /** 常规：第 2 次任务结束后开始，每次任务后 1 张，共 3 张 */
+  /** 常规（官方变体 #1）：牌堆 3 空白 + 2 转换，第 2 次任务结束后开始翻，共翻 3 张 */
   NORMAL: {
     beforeFirstMission: false,
     afterRounds: [1, 2, 3],
     maxFlips: 3,
+    blanks: 3,
+    swaps: 2,
   },
-  /** 开局：第 1 次任务开始前先翻 1 张，之后每次任务后 1 张，共 5 张 */
+  /** 开局（官方变体 #2）：牌堆 5 空白 + 2 转换，洗好发 5 张，第 1 次任务前就翻头一张 */
   OPENING: {
     beforeFirstMission: true,
     afterRounds: [0, 1, 2, 3],
     maxFlips: 5,
+    blanks: 5,
+    swaps: 2,
   },
 } as const;
 
-/** 「阵营转换」牌出现概率档位。GAME.md §8.3 */
-export const LOYALTY_SWAP_CHANCES = [0.25, 0.33, 0.5] as const;
-export const DEFAULT_LOYALTY_SWAP_CHANCE = 0.33;
+/** 一局最多换几次阵营 —— 两个变体的牌堆里都只有 2 张转换牌 */
+export const MAX_LOYALTY_SWAPS = 2;
 
 export const isValidPlayerCount = (n: number): n is PlayerCount =>
   Number.isInteger(n) && n >= MIN_PLAYERS && n <= MAX_PLAYERS;

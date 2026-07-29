@@ -20,7 +20,8 @@ const make = (roles: readonly RoleId[] = FIVE): GameState => {
       settings: {
         mode: "STANDARD", ladyOfTheLake: false, earlyAssassination: false,
         leaderRotation: "CLOCKWISE", rejectCounting: "PER_ROUND",
-        loyaltyFlipTiming: "NORMAL", loyaltySwapChance: 0.33, hideLoyaltyFlipResult: false,
+        loyaltyFlipTiming: "NORMAL", hideLoyaltyFlipResult: false,
+        lancelotsKnowEachOther: false,
       },
       firstLeaderSeat: 0,
     },

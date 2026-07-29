@@ -6,8 +6,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { ROLES, type PlayerCount, type RoleId } from "@avalon/shared";
-import { seededRng } from "./rng.js";
+import { MAX_LOYALTY_SWAPS, ROLES, type PlayerCount, type RoleId } from "@avalon/shared";
+import { seededRng, type Rng } from "./rng.js";
 import { computeVision } from "./vision.js";
 import { assassinSeat, canEarlyAssassinate, createGame, ladyTargets, reduce } from "./machine.js";
 import type { ErrorCode, GameSettings } from "@avalon/shared";
@@ -24,8 +24,8 @@ const settings = (over: Partial<GameSettings> = {}): GameSettings => ({
   leaderRotation: "CLOCKWISE",
   rejectCounting: "PER_ROUND",
   loyaltyFlipTiming: "NORMAL",
-  loyaltySwapChance: 0.33,
   hideLoyaltyFlipResult: false,
+  lancelotsKnowEachOther: false,
   ...over,
 });
 
@@ -484,6 +484,68 @@ describe("兰斯洛特模式", () => {
     // 开局翻牌不能把轮次推掉 —— 否则第 1 轮任务直接被跳过
     expect(started.roundIndex).toBe(0);
     expect(started.missions).toHaveLength(0);
+  });
+
+  /**
+   * 官方 Lancelot promo 的牌堆是**固定构成**的，不是每张独立掷骰：
+   * 变体 #1 是 3 空白 + 2 转换共 5 张、只翻 3 张，变体 #2 是 5 空白 + 2 转换
+   * 共 7 张、发 5 张。所以一局最多换 2 次，而且翻过的牌会改变后面的概率。
+   */
+  describe("忠诚牌堆构成", () => {
+    /*
+     * 分布类断言不能用 seededRng —— 它是**循环**的固定序列，
+     * 洗一副 7 张牌只消费 6 个数，取模之后能洗出的排列少得可怜，
+     * 会让「翻满 2 张」这种本该占四成的情况一次都不出现。
+     */
+    const lcg = (seed: number): Rng => {
+      let x = (seed >>> 0) || 1;
+      return {
+        int(max) {
+          x = (Math.imul(x, 1664525) + 1013904223) >>> 0;
+          return max <= 0 ? 0 : x % max;
+        },
+      };
+    };
+    const decksOf = (timing: "NORMAL" | "OPENING", n: number) =>
+      Array.from({ length: n }, (_, i) =>
+        createGame(
+          { playerCount: 7, settings: settings({ mode: "LANCELOT", loyaltyFlipTiming: timing }) },
+          lcg(i + 1),
+        ).loyalty!.deck,
+      );
+
+    it("翻的张数按时机表来", () => {
+      for (const d of decksOf("NORMAL", 30)) expect(d).toHaveLength(3);
+      for (const d of decksOf("OPENING", 30)) expect(d).toHaveLength(5);
+    });
+
+    it("一局最多只可能换 2 次 —— 牌堆里就只有 2 张转换牌", () => {
+      for (const timing of ["NORMAL", "OPENING"] as const) {
+        for (const deck of decksOf(timing, 200)) {
+          expect(deck.filter(Boolean).length, timing).toBeLessThanOrEqual(MAX_LOYALTY_SWAPS);
+        }
+      }
+    });
+
+    it("两种极端都出得来：一张转换牌都没翻到，和翻满 2 张", () => {
+      for (const timing of ["NORMAL", "OPENING"] as const) {
+        const counts = new Set(decksOf(timing, 200).map((d) => d.filter(Boolean).length));
+        expect(counts, `${timing} 只出现过 ${[...counts]}`).toContain(0);
+        expect(counts, `${timing} 只出现过 ${[...counts]}`).toContain(MAX_LOYALTY_SWAPS);
+      }
+    });
+
+    it("常规变体有 2 张牌永远不揭 —— 翻 3 张不等于把 5 张翻完", () => {
+      // 5 张里有 2 张转换，如果翻满 5 张，「一张都没转换」就不可能出现；
+      // 官方是只翻 3 张，所以这种局面必须存在
+      const none = decksOf("NORMAL", 200).filter((d) => !d.some(Boolean));
+      expect(none.length, "常规模式下从来没出现过整局不换边").toBeGreaterThan(0);
+    });
+
+    it("标准模式没有忠诚牌堆", () => {
+      const g = createGame({ playerCount: 7, settings: settings() }, RNG);
+      expect(g.loyalty).toBeNull();
+    });
   });
 
   it("翻到「阵营转换」时两个兰斯洛特互换阵营，其他人不动", () => {

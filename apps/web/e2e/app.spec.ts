@@ -608,18 +608,32 @@ test.describe("扔东西和表情包", () => {
 
   test("点自己头像弹的是表情包", async ({ browser }) => {
     const { ctxs, pages, host } = await startGame(browser);
-    const notLeader = pages.find(
-      (p) => p !== host,
-    )!;
+    /*
+     * **必须真的找出一个不是队长的人。** 首任队长是随机的，
+     * 「不是房主」不等于「不是队长」—— 队长在组队阶段点座位是选人，
+     * 表情包菜单根本不会出来，这条用例就会时灵时不灵。
+     */
+    let notLeader: (typeof pages)[number] | null = null;
+    for (const p of pages) {
+      const isLeader = await p
+        .getByRole("button", { name: /选 \d+ 个人|^确认 \d/ })
+        .isVisible()
+        .catch(() => false);
+      if (!isLeader) {
+        notLeader = p;
+        break;
+      }
+    }
+    expect(notLeader, "全场都是队长？").not.toBeNull();
     // 找到自己那格：座位号和进房顺序一致
-    const mySeat = pages.indexOf(notLeader);
+    const mySeat = pages.indexOf(notLeader!);
 
-    await notLeader.locator(`button[data-seat="${mySeat}"]`).click();
-    await expect(notLeader.getByRole("button", { name: "我信你个鬼" })).toBeVisible();
+    await notLeader!.locator(`button[data-seat="${mySeat}"]`).click();
+    await expect(notLeader!.getByRole("button", { name: "我信你个鬼" })).toBeVisible();
     // 不该出现扔东西的选项
-    await expect(notLeader.getByRole("button", { name: "砸蛋" })).toHaveCount(0);
+    await expect(notLeader!.getByRole("button", { name: "砸蛋" })).toHaveCount(0);
 
-    await notLeader.getByRole("button", { name: "我信你个鬼" }).click();
+    await notLeader!.getByRole("button", { name: "我信你个鬼" }).click();
     // 全场都看得到，气泡上带那句话
     await expect(host.getByText("我信你个鬼")).toBeVisible();
 
@@ -928,6 +942,64 @@ test.describe("对局记录", () => {
     await expect(host.getByText("刺客选择了")).toBeVisible();
     // 出牌人依然不记录
     await expect(host.getByText(/对局进行时谁都看不到/)).toBeVisible();
+
+    for (const c of ctxs) await c.close();
+  });
+});
+
+test.describe("兰斯洛特互认", () => {
+  /**
+   * 官方 Lancelot promo 变体 #3。默认是不互认的，所以这条要验两件事：
+   * 开了之后两位兰斯洛特认得对方，**且这条情报没漏给别人**。
+   */
+  test("开了开关后，两个兰斯洛特互相认得，别人看不到这条", async ({ browser }) => {
+    test.setTimeout(120_000);
+    // 兰斯洛特模式 7 人起
+    const ctxs = await Promise.all(
+      Array.from({ length: 7 }, () => browser.newContext({ locale: "zh-CN" })),
+    );
+    const pages = await Promise.all(ctxs.map((c) => c.newPage()));
+    for (const [i, p] of pages.entries()) await openApp(p, `兰${i + 1}`);
+
+    const host = pages[0]!;
+    const code = await createRoom(host, "兰斯洛特测试");
+    await host.getByRole("button", { name: "设置" }).click();
+    const sheet = host.getByRole("dialog");
+    await sheet.getByRole("button", { name: "7", exact: true }).click();
+    await sheet.getByRole("button", { name: /兰斯洛特/ }).first().click();
+    await expect(sheet.getByRole("button", { name: /兰斯洛特互认/ })).toBeVisible();
+    await sheet.getByRole("button", { name: /兰斯洛特互认/ }).click();
+    await host.keyboard.press("Escape");
+    await expect(host.getByRole("dialog")).toHaveCount(0);
+
+    await sit(host, 0);
+    for (const [i, p] of pages.slice(1).entries()) {
+      await p.getByPlaceholder("房间码").fill(code);
+      await p.getByRole("button", { name: "进", exact: true }).click();
+      await sit(p, i + 1);
+    }
+    for (const p of pages) await p.getByRole("button", { name: "准备" }).click();
+    await host.getByRole("button", { name: "开始游戏" }).click();
+
+    // 翻牌，记下谁看到了「另一位兰斯洛特」以及看到的是谁
+    const sawCounterpart: { seat: number; target: string }[] = [];
+    for (const [i, p] of pages.entries()) {
+      const dialog = p.getByRole("dialog");
+      await dialog.getByRole("button", { name: /点击查看身份/ }).click();
+      const block = dialog.locator("div", { hasText: "另一位兰斯洛特" });
+      if (await block.count()) {
+        sawCounterpart.push({ seat: i, target: await block.last().innerText() });
+      }
+      await p.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+    }
+
+    // 恰好两个人看得到，其余五个人一个字都没有
+    expect(sawCounterpart.map((x) => x.seat), "看到对家的不是恰好两人").toHaveLength(2);
+    const [a, b] = sawCounterpart as [(typeof sawCounterpart)[0], (typeof sawCounterpart)[0]];
+    // 而且互相指向对方 —— 卡上写的是座位号
+    expect(a.target).toContain(String(b.seat + 1));
+    expect(b.target).toContain(String(a.seat + 1));
 
     for (const c of ctxs) await c.close();
   });

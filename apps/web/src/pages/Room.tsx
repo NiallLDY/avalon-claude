@@ -9,7 +9,6 @@ import { useState } from "react";
 import {
   LADY_MIN_PLAYERS,
   LANCELOT_MIN_PLAYERS,
-  LOYALTY_SWAP_CHANCES,
   MAX_PLAYERS,
   MIN_PLAYERS,
   ROLES,
@@ -345,22 +344,18 @@ export const Room = () => {
                   value={s.loyaltyFlipTiming}
                   onChange={(loyaltyFlipTiming) => host && patch({ loyaltyFlipTiming })}
                   options={[
-                    { value: "NORMAL", label: "常规（3 张）" },
-                    { value: "OPENING", label: "开局（5 张）" },
+                    { value: "NORMAL", label: "常规（翻 3 张）" },
+                    { value: "OPENING", label: "开局（翻 5 张）" },
                   ]}
                 />
               </div>
-              <div>
-                <p className="mb-2 text-xs text-ink-mute">换边的概率</p>
-                <Segmented
-                  value={String(s.loyaltySwapChance)}
-                  onChange={(v) => host && patch({ loyaltySwapChance: Number(v) })}
-                  options={LOYALTY_SWAP_CHANCES.map((c) => ({
-                    value: String(c),
-                    label: `${Math.round(c * 100)}%`,
-                  }))}
-                />
-              </div>
+              <Toggle
+                label="兰斯洛特互认"
+                hint="官方变体 #3：开局两位兰斯洛特互相知道对方是谁。官方注明人多时才推荐"
+                checked={s.lancelotsKnowEachOther}
+                disabled={!host}
+                onChange={(lancelotsKnowEachOther) => patch({ lancelotsKnowEachOther })}
+              />
               <Toggle
                 label="不公开翻牌结果"
                 hint="别人只知道翻了一张牌，兰斯洛特自己仍能看到现在站哪边"

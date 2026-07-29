@@ -7,7 +7,7 @@
  */
 
 import { z } from "zod";
-import { LOYALTY_SWAP_CHANCES, MAX_PLAYERS, MIN_PLAYERS } from "./tables.js";
+import { MAX_PLAYERS, MIN_PLAYERS } from "./tables.js";
 import type { GameSettings } from "./game.js";
 import {
   CLIENT_EVENT_NAMES,
@@ -58,12 +58,8 @@ export const gameSettingsSchema = z.object({
   leaderRotation: z.enum(["CLOCKWISE", "RANDOM"]),
   rejectCounting: z.enum(["PER_ROUND", "GLOBAL"]),
   loyaltyFlipTiming: z.enum(["NORMAL", "OPENING"]),
-  loyaltySwapChance: z
-    .number()
-    .refine((v) => (LOYALTY_SWAP_CHANCES as readonly number[]).includes(v), {
-      message: "阵营转换概率只能是预设的三档之一",
-    }),
   hideLoyaltyFlipResult: z.boolean(),
+  lancelotsKnowEachOther: z.boolean(),
 }) satisfies z.ZodType<GameSettings>;
 
 export const roomOptionsSchema = z.object({

@@ -30,8 +30,12 @@ export interface GameSettings {
   /** 轮内连续（官方，GAME.md Q1）or 全局累计 */
   readonly rejectCounting: "PER_ROUND" | "GLOBAL";
   readonly loyaltyFlipTiming: "NORMAL" | "OPENING";
-  readonly loyaltySwapChance: number;
   readonly hideLoyaltyFlipResult: boolean;
+  /**
+   * 两个兰斯洛特开局互相知道对方是谁 —— 官方 Lancelot promo 变体 #3，
+   * 原文注明「Recommended for larger groups only」，所以默认关。
+   */
+  readonly lancelotsKnowEachOther: boolean;
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
@@ -41,8 +45,8 @@ export const DEFAULT_SETTINGS: GameSettings = {
   leaderRotation: "CLOCKWISE",
   rejectCounting: "PER_ROUND",
   loyaltyFlipTiming: "NORMAL",
-  loyaltySwapChance: 0.33,
   hideLoyaltyFlipResult: false,
+  lancelotsKnowEachOther: false,
 };
 
 /**
@@ -56,6 +60,14 @@ export interface Vision {
   readonly merlinCandidates: readonly number[];
   /** evilSeats 中需要标注「兰斯洛特」的座位。只有红方队友视角才有值 */
   readonly lancelotSeats: readonly number[];
+  /**
+   * 对家兰斯洛特的座位。只在开了「兰斯洛特互认」时，发给两位兰斯洛特本人。
+   *
+   * **不能塞进 evilSeats** —— 蓝兰看到的那个人此刻是红方没错，但换过阵营后
+   * 就不是了，而视野是冻结的。这里的语义是「和我永远相反的那一位」，
+   * 不是「他是红方」。
+   */
+  readonly counterpartSeat: number | null;
 }
 
 export type WinReason =

@@ -25,7 +25,7 @@ import {
   type RoleId,
   type Side,
 } from "@avalon/shared";
-import type { Rng } from "./rng.js";
+import { shuffle, type Rng } from "./rng.js";
 import { dealRoles, initialSides } from "./setup.js";
 import { computeVision } from "./vision.js";
 import type { Action, GameState, ReduceResult } from "./types.js";
@@ -99,11 +99,24 @@ export interface CreateGameOptions {
   readonly firstLeaderSeat?: number;
 }
 
-/** 预生成忠诚牌堆。每张独立按概率决定，随机源只在开局注入一次，复盘可完整重放。 */
-const buildLoyaltyDeck = (chance: number, maxFlips: number, rng: Rng): boolean[] => {
-  const RESOLUTION = 1000;
-  const threshold = Math.round(chance * RESOLUTION);
-  return Array.from({ length: maxFlips }, () => rng.int(RESOLUTION) < threshold);
+/**
+ * 预生成忠诚牌堆 —— 官方那副**固定构成**的牌，洗好之后取会翻到的那几张。
+ *
+ * 常规是 5 张里翻 3 张（剩下 2 张永远不揭），开局是 7 张里发 5 张。
+ * 所以：一局最多换 2 次，且已翻的牌会改变后面的概率。
+ *
+ * 随机源只在开局注入一次，翻牌本身是纯揭开，复盘可完整重放。
+ */
+const buildLoyaltyDeck = (
+  timing: GameSettings["loyaltyFlipTiming"],
+  rng: Rng,
+): boolean[] => {
+  const { blanks, swaps, maxFlips } = LOYALTY_FLIP_SCHEDULE[timing];
+  const deck = [
+    ...Array.from({ length: swaps }, () => true),
+    ...Array.from({ length: blanks }, () => false),
+  ];
+  return shuffle(deck, rng).slice(0, maxFlips);
 };
 
 export const createGame = (opts: CreateGameOptions, rng: Rng): GameState => {
@@ -120,7 +133,7 @@ export const createGame = (opts: CreateGameOptions, rng: Rng): GameState => {
     phase: "ROLE_REVEAL",
     roles,
     sides: initialSides(roles),
-    vision: computeVision(roles, rng),
+    vision: computeVision(roles, rng, settings),
     roleAcked: roles.map(() => false),
     roundIndex: 0,
     leaderSeat,
@@ -134,7 +147,7 @@ export const createGame = (opts: CreateGameOptions, rng: Rng): GameState => {
     missions: [],
     loyalty: isLancelot
       ? {
-          deck: buildLoyaltyDeck(settings.loyaltySwapChance, schedule.maxFlips, rng),
+          deck: buildLoyaltyDeck(settings.loyaltyFlipTiming, rng),
           drawn: 0,
           flips: [],
         }
