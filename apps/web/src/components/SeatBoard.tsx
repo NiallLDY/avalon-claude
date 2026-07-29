@@ -45,21 +45,85 @@ const IMPACT = {
   // 不加 as const：Motion 的关键帧要可变数组，readonly 元组过不了类型
 };
 
-/** 落地标记。延迟 = 飞行时长，等东西真到了才炸 —— 不然砸的是空气 */
-const ImpactMark = ({ flight }: { flight: Flight }) => {
+const FLY_MS = 0.55;
+const IMPACT_MS = 0.45;
+/** 连发里第 i 个的出发延迟 */
+const stagger = (i: number) => i * 0.09;
+
+/**
+ * 一次投掷：抛射物飞过去，到了再放落地效果。
+ *
+ * 两层嵌套是有必要的，不是偷懒：
+ * **外层只管定位（把自己挪到中心），内层才动画。**
+ * Motion 会把动画写进元素的 `transform`，和 Tailwind 的 `-translate-x-1/2`
+ * 撞在同一个属性上，写死在一个元素里迟早互相覆盖。
+ */
+const Toss = ({
+  flight,
+  index,
+  onDone,
+}: {
+  flight: Flight;
+  index: number;
+  onDone?: (() => void) | undefined;
+}) => {
+  const delay = stagger(index);
+  // 连发时每个稍微散开，不然十个叠成一个
+  const jitter = flight.count > 1 ? (index - (flight.count - 1) / 2) * 9 : 0;
   const spec = IMPACT[REACTION_META[flight.kind].impact];
+
   return (
-    <m.span
-      aria-hidden
-      data-toss-hit={flight.kind}
-      className="pointer-events-none absolute z-30 -translate-x-1/2 -translate-y-1/2 text-2xl"
-      style={{ left: flight.x + flight.dx, top: flight.y + flight.dy }}
-      initial={spec.initial}
-      animate={spec.animate}
-      transition={{ duration: 0.45, delay: 0.52 + (flight.count - 1) * 0.09, ease: "easeOut" }}
-    >
-      {REACTION_META[flight.kind].hit}
-    </m.span>
+    <>
+      <span
+        aria-hidden
+        className="pointer-events-none absolute z-30 -translate-x-1/2 -translate-y-1/2"
+        style={{ left: flight.x, top: flight.y }}
+      >
+        <m.span
+          data-toss={flight.kind}
+          className="block text-3xl drop-shadow-lg"
+          initial={{ x: 0, y: 0, scale: 0.5, opacity: 0, rotate: 0 }}
+          animate={{
+            x: flight.dx + jitter,
+            // 三个关键帧：起点 → 抬到峰值 → 落到目标。times 让峰值卡在 45%
+            y: [0, flight.dy * 0.42 - flight.arc, flight.dy + jitter * 0.3],
+            scale: [0.5, 1.25, 1],
+            opacity: [0, 1, 1],
+            rotate: flight.spin,
+          }}
+          exit={{ opacity: 0, scale: 0.8 }}
+          transition={{
+            duration: FLY_MS,
+            delay,
+            // 横移匀速，纵向按关键帧走 —— 两条曲线不一样才有重量
+            x: { duration: FLY_MS, delay, ease: "linear" },
+            y: { duration: FLY_MS, delay, times: [0, 0.45, 1], ease: "easeOut" },
+            rotate: { duration: FLY_MS, delay, ease: "linear" },
+            opacity: { duration: FLY_MS, delay, times: [0, 0.1, 1] },
+          }}
+        >
+          {REACTION_META[flight.kind].emoji}
+        </m.span>
+      </span>
+
+      {/* 落地。延迟 = 出发延迟 + 飞行时长，等东西真到了才炸，不然砸的是空气 */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute z-30 -translate-x-1/2 -translate-y-1/2"
+        style={{ left: flight.x + flight.dx + jitter, top: flight.y + flight.dy }}
+      >
+        <m.span
+          data-toss-hit={flight.kind}
+          className="block text-2xl"
+          initial={spec.initial}
+          animate={spec.animate}
+          transition={{ duration: IMPACT_MS, delay: delay + FLY_MS, ease: "easeOut" }}
+          {...(onDone ? { onAnimationComplete: onDone } : {})}
+        >
+          {REACTION_META[flight.kind].hit}
+        </m.span>
+      </span>
+    </>
   );
 };
 
@@ -496,56 +560,26 @@ export const SeatBoard = ({
           连发的 count 个用 delay 错开出发，不再在 store 里排 setTimeout。
           清理也不靠定时器猜：最后一个落地了才 dropReaction。
         */}
+        {/*
+          一次投掷 = 一个抛射物 + 它自己的落地效果，绑在同一个组件里。
+
+          **收摊必须挂在最后收尾的那个动画上。** 之前挂在抛射物的
+          onAnimationComplete 上：抛射 0.55s 结束就把整条 reaction 删了，
+          而落地效果 0.52s 才开始、要放到 0.97s —— 它只有 30ms 的命，
+          且那 30ms 里还是 opacity 0。任何浏览器都可能输掉这个竞态，
+          Safari 每次都输，表现就是「水桶没有水滴」。
+        */}
         <AnimatePresence>
           {flights.flatMap((f) =>
-            Array.from({ length: f.count }, (_, i) => {
-              const last = i === f.count - 1;
-              const delay = i * 0.09;
-              // 连发时每个稍微散开一点，不然十个叠成一个
-              const jitter = f.count > 1 ? (i - (f.count - 1) / 2) * 9 : 0;
-              return (
-                <m.span
-                  key={`${f.id}-${i}`}
-                  aria-hidden
-                  data-toss={f.kind}
-                  className="pointer-events-none absolute z-30 text-3xl drop-shadow-lg"
-                  style={{ left: f.x, top: f.y }}
-                  initial={{ x: -14, y: -14, scale: 0.5, opacity: 0, rotate: 0 }}
-                  animate={{
-                    x: f.dx - 14 + jitter,
-                    // 三个关键帧：起点 → 抬到峰值 → 落到目标。times 让峰值卡在 45%
-                    y: [-14, -14 + f.dy * 0.42 - f.arc, f.dy - 14 + jitter * 0.3],
-                    scale: [0.5, 1.25, 1],
-                    opacity: [0, 1, 1],
-                    rotate: f.spin,
-                  }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  transition={{
-                    duration: 0.55,
-                    delay,
-                    // 横移匀速，纵向按关键帧走 —— 两条曲线不一样才有重量
-                    x: { duration: 0.55, delay, ease: "linear" },
-                    y: { duration: 0.55, delay, times: [0, 0.45, 1], ease: "easeOut" },
-                    rotate: { duration: 0.55, delay, ease: "linear" },
-                    opacity: { duration: 0.55, delay, times: [0, 0.1, 1] },
-                  }}
-                  onAnimationComplete={() => {
-                    // 最后一个落地才收摊。中途收会把还在飞的一起删掉
-                    if (last) dropReaction(f.id);
-                  }}
-                >
-                  {REACTION_META[f.kind].emoji}
-                </m.span>
-              );
-            }),
+            Array.from({ length: f.count }, (_, i) => (
+              <Toss
+                key={`${f.id}-${i}`}
+                flight={f}
+                index={i}
+                onDone={i === f.count - 1 ? () => dropReaction(f.id) : undefined}
+              />
+            )),
           )}
-        </AnimatePresence>
-
-        {/* 砸中/落地那一下，钉在目标座位上 */}
-        <AnimatePresence>
-          {flights.map((f) => (
-            <ImpactMark key={`hit-${f.id}`} flight={f} />
-          ))}
         </AnimatePresence>
       </div>
     </div>

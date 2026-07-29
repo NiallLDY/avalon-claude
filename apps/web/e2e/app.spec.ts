@@ -571,8 +571,19 @@ test.describe("扔东西和表情包", () => {
     await thrower.getByRole("button", { name: "砸蛋" }).click();
     // 全场都该看到它飞
     await expect(host.locator('[data-toss="EGG"]')).toHaveCount(1);
-    // 飞完自己收摊
+
+    /*
+     * 落地效果必须**真的出现**。
+     * 之前收摊挂在抛射动画上：抛射一结束就把整条 reaction 删了，
+     * 落地那一下只有几十毫秒的命，还在 opacity 0 —— Safari 上根本看不到。
+     * 这条断言就是钉住那个竞态。
+     */
+    await expect(host.locator('[data-toss-hit="EGG"]')).toHaveCount(1);
+    await expect(host.locator('[data-toss-hit="EGG"]')).toBeVisible();
+
+    // 放完了自己收摊
     await expect(host.locator("[data-toss]")).toHaveCount(0, { timeout: 4000 });
+    await expect(host.locator("[data-toss-hit]")).toHaveCount(0);
 
     for (const c of ctxs) await c.close();
   });
