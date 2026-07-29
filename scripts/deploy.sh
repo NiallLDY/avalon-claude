@@ -45,8 +45,35 @@ if [[ "${status:-}" != "healthy" ]]; then
   exit 1
 fi
 
-log "清理旧镜像"
-docker image prune -f >/dev/null
+# ── 清理 ──
+# 不清的话磁盘是单调增长的：实测跑几十次构建后，构建缓存到了 7.6GB。
+log "清理构建残留"
+
+# 1) 悬空镜像：上一版 avalon-app 被新构建顶掉之后成了无 tag 的，只有这些该删。
+#
+#    **不要加 -a** —— 那会把 node、redis、playwright 那个 3.7GB 的测试镜像一起删掉。
+#    它们只是「此刻没有容器在跑」，不是没用，删了下次还得重下。
+#
+#    这条在**用 containerd snapshotter 的机器上永远回收 0**：那种存储下重建同名 tag
+#    不留悬空镜像，旧内容由 containerd 自己 GC。传统 overlay2 镜像存储上它才有用 ——
+#    看到它常年是 0 别急着删，换台机器就需要了。
+freed_img=$(docker image prune -f | awk -F': ' '/Total reclaimed/ {print $2}')
+
+# 2) 构建缓存 —— **真正一直涨的是这块**，实测跑几十次构建后到了 7.6GB，
+#    这一条清掉了其中 1.6GB。
+#    默认参数只清已经悬空的层，当前构建图还在用的活缓存留着，下次构建照样是增量的。
+#    （试过 --max-used-space，docker 29 下它一个字节都不清，文档和行为对不上，别用。）
+freed_cache=$(docker builder prune -f | awk -F': ' '/^Total:/ {print $2}')
+
+log "回收：镜像 ${freed_img:-0B} · 构建缓存 ${freed_cache:-0B}"
+
+# 磁盘真的紧张时再上这个：连活缓存一起清，代价是下次构建从头跑一遍
+if [[ "${DEEP_CLEAN:-0}" == "1" ]]; then
+  log "深度清理（下次构建会变慢）"
+  docker builder prune -af | awk -F': ' '/^Total:/ {print "    再回收 " $2}'
+fi
+
+docker system df | sed 's/^/    /'
 
 log "完成。当前状态："
 docker compose ps
