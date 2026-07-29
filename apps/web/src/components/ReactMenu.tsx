@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useRef } from "react";
+import { m } from "motion/react";
 import { EMOTES, REACTIONS, REACTION_META, type Reaction } from "@avalon/shared";
 
 interface Anchor {
@@ -33,9 +34,12 @@ const Panel = ({
   const ref = useRef<HTMLDivElement | null>(null);
   useOutsideClose(ref, onClose);
   return (
-    <div
+    <m.div
       ref={ref}
-      className="pointer-events-auto absolute z-40 animate-[pop_0.14s_ease-out]"
+      className="pointer-events-auto absolute z-40"
+      initial={{ opacity: 0, scale: 0.86 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ type: "spring", stiffness: 500, damping: 28 }}
       style={{
         top: anchor.y,
         ...(anchor.side === "left"
@@ -45,7 +49,7 @@ const Panel = ({
       }}
     >
       <div className="rounded-2xl border border-line bg-surface-2 p-1.5 shadow-xl">{children}</div>
-    </div>
+    </m.div>
   );
 };
 

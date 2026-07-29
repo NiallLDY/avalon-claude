@@ -68,10 +68,17 @@ export interface FlyingReaction {
   readonly fromSeat: number;
   readonly targetSeat: number;
   readonly kind: Reaction;
+  /** 连发的个数。渲染层据此错开出发 */
+  readonly count: number;
 }
 
 /** 从飞出去到淡完的总时长。和 styles.css 里那组 toss-* 关键帧对齐 */
-const REACTION_MS = 1_000;
+/**
+ * 兜底清理时限。**不再需要和动画时长精确对齐** ——
+ * 正常路径是飞完了组件调 dropReaction；这个只在组件中途被卸载、
+ * 没人来报完成时兜底，所以取一个明显偏长的值就行。
+ */
+const REACTION_MS = 4_000;
 
 /** 心跳间隔。线下发牌器的流量可以忽略不计，快一点让卡顿早点被看见 */
 const PING_INTERVAL_MS = 4_000;
@@ -126,6 +133,8 @@ interface AppState {
   emit: (event: string, payload?: unknown) => void;
   act: (action: ClientAction) => void;
   react: (targetSeat: number, kind: Reaction, burst?: boolean) => void;
+  /** 飞完了。由渲染层在动画结束时调 */
+  dropReaction: (id: number) => void;
   emote: (emoteId: string) => void;
   setSettings: (settings: GameSettings) => void;
   toast: (text: string, tone?: Toast["tone"]) => void;
@@ -166,15 +175,6 @@ let reactionSeq = 0;
 /** 表情包停留时长。和 SeatBoard 里的气泡动画时长是一对 */
 const EMOTE_MS = 2600;
 
-/** 生成一次飞行，到点自己收摊 */
-const spawnReaction = (
-  set: (fn: (s: AppState) => Partial<AppState>) => void,
-  r: Omit<FlyingReaction, "id">,
-): void => {
-  const id = ++reactionSeq;
-  set((s) => ({ reactions: [...s.reactions, { ...r, id }] }));
-  setTimeout(() => set((s) => ({ reactions: s.reactions.filter((x) => x.id !== id) })), REACTION_MS);
-};
 
 /** 错误码 → 给人看的话。服务端回的是机器码，别直接甩给用户 */
 const ERROR_TEXT: Record<string, string> = {
@@ -282,13 +282,16 @@ export const useStore = create<AppState>((set, get) => ({
 
     socket.on("room:list", ({ rooms }: { rooms: RoomSummary[] }) => set({ rooms }));
 
-    socket.on("reaction", (r: Omit<FlyingReaction, "id"> & { count?: number }) => {
-      // 连发是一条消息带个数，客户端展开成 N 个错开出发的飞行 ——
-      // 发 10 条消息会被限流掐掉，而且到达时间也不齐
-      const count = Math.max(1, Math.min(r.count ?? 1, 20));
-      for (let i = 0; i < count; i++) {
-        setTimeout(() => spawnReaction(set, r), i * 110);
-      }
+    socket.on("reaction", (r: Omit<FlyingReaction, "id">) => {
+      /*
+       * 一条消息就是一次投掷，`count` 是连发的个数 ——
+       * 错开出发交给渲染层的 stagger，不在这里拆成 N 个 setTimeout。
+       * 什么时候清掉也不再靠定时器猜：飞完了组件自己来 dropReaction。
+       */
+      const id = ++reactionSeq;
+      set((s) => ({ reactions: [...s.reactions, { ...r, id }] }));
+      // 兜底：组件要是在飞行途中被卸载，没人来报完成，别让它永远留在数组里
+      setTimeout(() => get().dropReaction(id), REACTION_MS);
     });
 
     socket.on("emote", ({ fromSeat, emoteId }: { fromSeat: number; emoteId: string }) => {
@@ -419,6 +422,8 @@ export const useStore = create<AppState>((set, get) => ({
   react: (targetSeat, kind, burst) =>
     get().socket?.emit("game:react", { targetSeat, kind, ...(burst ? { burst: true } : {}) }),
   emote: (emoteId) => get().socket?.emit("game:emote", { emoteId }),
+  dropReaction: (id) =>
+    set((s) => ({ reactions: s.reactions.filter((x) => x.id !== id) })),
   setSettings: (settings) => get().socket?.emit("room:settings", { settings }),
 
   toast: (text, tone = "info") => {

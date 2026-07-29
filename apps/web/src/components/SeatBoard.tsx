@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, m } from "motion/react";
 import {
   EMOTES,
   REACTION_META,
@@ -26,9 +27,41 @@ import { useStore } from "../store.js";
 /**
  * 落地那一下。**送花和挨砸不能共用一套** ——
  * 送花却让对方头像抖一下、再炸一下，那是挨揍的语言。
- * 砸：炸开 + 抖。花：轻轻绽开往上飘，头像不动。泼水：往下淌。
+ * 砸：炸开。花：轻轻绽开往上飘。泼水：往下淌。
  */
-const HIT_ANIM = { gift: "toss-bloom", hit: "toss-hit", splash: "toss-splash" } as const;
+const IMPACT = {
+  gift: {
+    initial: { scale: 0.3, opacity: 0, y: 0, rotate: -20 },
+    animate: { scale: [0.3, 1.15, 0.9], opacity: [0, 1, 0], y: [0, -14, -46], rotate: [-20, 0, 15] },
+  },
+  hit: {
+    initial: { scale: 0.2, opacity: 0 },
+    animate: { scale: [0.2, 1.5, 2], opacity: [0, 1, 0] },
+  },
+  splash: {
+    initial: { scale: 0.4, opacity: 0, y: -14 },
+    animate: { scale: [0.4, 1.4, 1.1], opacity: [0, 1, 0], y: [-14, 0, 22] },
+  },
+  // 不加 as const：Motion 的关键帧要可变数组，readonly 元组过不了类型
+};
+
+/** 落地标记。延迟 = 飞行时长，等东西真到了才炸 —— 不然砸的是空气 */
+const ImpactMark = ({ flight }: { flight: Flight }) => {
+  const spec = IMPACT[REACTION_META[flight.kind].impact];
+  return (
+    <m.span
+      aria-hidden
+      data-toss-hit={flight.kind}
+      className="pointer-events-none absolute z-30 -translate-x-1/2 -translate-y-1/2 text-2xl"
+      style={{ left: flight.x + flight.dx, top: flight.y + flight.dy }}
+      initial={spec.initial}
+      animate={spec.animate}
+      transition={{ duration: 0.45, delay: 0.52 + (flight.count - 1) * 0.09, ease: "easeOut" }}
+    >
+      {REACTION_META[flight.kind].hit}
+    </m.span>
+  );
+};
 
 /** 一次飞行：起点（相对棋盘）+ 到目标的位移。像素，量出来的 */
 interface Flight {
@@ -40,6 +73,7 @@ interface Flight {
   readonly dy: number;
   readonly arc: number;
   readonly spin: number;
+  readonly count: number;
 }
 
 interface Props {
@@ -116,6 +150,7 @@ export const SeatBoard = ({
   const size = avatarSize(rows);
   const reactions = useStore((s) => s.reactions);
   const emotes = useStore((s) => s.emotes);
+  const dropReaction = useStore((s) => s.dropReaction);
 
   /*
    * 花和蛋要**从扔的人座位飞到目标座位**，所以得知道两个座位在屏幕上的实际位置。
@@ -158,6 +193,7 @@ export const SeatBoard = ({
         arc: Math.min(80, 18 + Math.abs(dx) * 0.22),
         // 往哪边转跟着飞的方向走，看着才像扔出去的
         spin: dx >= 0 ? 540 : -540,
+        count: Math.max(1, Math.min(r.count, 20)),
       });
     }
 
@@ -345,6 +381,7 @@ export const SeatBoard = ({
                 ) : null}
 
                 {/* 表情包气泡：从他头顶冒出来，飘一会儿散掉 */}
+                <AnimatePresence>
                 {emotes
                   .filter((e) => e.fromSeat === seat)
                   .slice(-1)
@@ -352,11 +389,15 @@ export const SeatBoard = ({
                     const meta = EMOTES.find((x) => x.id === e.emoteId);
                     if (!meta) return null;
                     return (
-                      <span
+                      <m.span
                         key={e.id}
-                        className="emote-pop pointer-events-none absolute -top-1 left-1/2 z-30
-                          flex w-max -translate-x-1/2 -translate-y-full flex-col items-center gap-0.5
-                          rounded-xl border border-line bg-surface px-1.5 py-1 shadow-lg"
+                        className="pointer-events-none absolute -top-1 left-1/2 z-30 flex w-max
+                          -translate-x-1/2 flex-col items-center gap-0.5 rounded-xl border
+                          border-line bg-surface px-1.5 py-1 shadow-lg"
+                        initial={{ opacity: 0, y: "-70%", scale: 0.6 }}
+                        animate={{ opacity: 1, y: "-100%", scale: 1 }}
+                        exit={{ opacity: 0, y: "-130%", scale: 0.9 }}
+                        transition={{ type: "spring", stiffness: 460, damping: 24 }}
                       >
                         <img
                           src={`/art/roles/emotes/${meta.art}.webp`}
@@ -369,9 +410,10 @@ export const SeatBoard = ({
                         <span className="max-w-[6rem] truncate text-[0.6rem] leading-none text-ink">
                           {meta.text}
                         </span>
-                      </span>
+                      </m.span>
                     );
                   })}
+                </AnimatePresence>
 
                 {!player.connected ? (
                   <span className="absolute inset-0 flex items-center justify-center rounded-full bg-ground/60 text-[0.6rem]">
@@ -422,33 +464,6 @@ export const SeatBoard = ({
           );
         })}
 
-        {/*
-          飞行层。盖在座位之上、不吃点击。三层嵌套各管一个方向，
-          合起来是一条从扔的人到目标的抛物线（关键帧见 styles.css）。
-        */}
-        {flights.map((f) => (
-          <span
-            key={f.id}
-            aria-hidden
-            data-toss={f.kind}
-            className="toss-x pointer-events-none absolute z-30"
-            style={{
-              left: f.x,
-              top: f.y,
-              ["--toss-dx" as string]: `${f.dx}px`,
-              ["--toss-dy" as string]: `${f.dy}px`,
-              ["--toss-arc" as string]: `${f.arc}px`,
-              ["--toss-spin" as string]: `${f.spin}deg`,
-            }}
-          >
-            <span className="toss-y block">
-              <span className="toss-spin block -translate-x-1/2 -translate-y-1/2 text-3xl drop-shadow-lg">
-                {REACTION_META[f.kind].emoji}
-              </span>
-            </span>
-          </span>
-        ))}
-
         {/* 点头像弹出来的小浮层，贴着那个座位 */}
         {menuSeat !== null && renderMenu
           ? (() => {
@@ -465,18 +480,66 @@ export const SeatBoard = ({
             })()
           : null}
 
-        {/* 砸中的那一下，钉在目标座位上 */}
-        {flights.map((f) => (
-          <span
-            key={`hit-${f.id}`}
-            aria-hidden
-            data-toss-hit={f.kind}
-            className={`${HIT_ANIM[REACTION_META[f.kind].impact]} pointer-events-none absolute z-30 text-2xl`}
-            style={{ left: f.x + f.dx, top: f.y + f.dy }}
-          >
-            {REACTION_META[f.kind].hit}
-          </span>
-        ))}
+        {/*
+          投掷。**一个元素，x 和 y 分开动画** ——
+          横向匀速、纵向带一个抬高的峰值，合起来才是抛物线。
+          CSS 里一个元素只有一个 transform，所以之前得套三层；
+          Motion 可以对同一个元素的 x/y 各给一条曲线。
+
+          连发的 count 个用 delay 错开出发，不再在 store 里排 setTimeout。
+          清理也不靠定时器猜：最后一个落地了才 dropReaction。
+        */}
+        <AnimatePresence>
+          {flights.flatMap((f) =>
+            Array.from({ length: f.count }, (_, i) => {
+              const last = i === f.count - 1;
+              const delay = i * 0.09;
+              // 连发时每个稍微散开一点，不然十个叠成一个
+              const jitter = f.count > 1 ? (i - (f.count - 1) / 2) * 9 : 0;
+              return (
+                <m.span
+                  key={`${f.id}-${i}`}
+                  aria-hidden
+                  data-toss={f.kind}
+                  className="pointer-events-none absolute z-30 text-3xl drop-shadow-lg"
+                  style={{ left: f.x, top: f.y }}
+                  initial={{ x: -14, y: -14, scale: 0.5, opacity: 0, rotate: 0 }}
+                  animate={{
+                    x: f.dx - 14 + jitter,
+                    // 三个关键帧：起点 → 抬到峰值 → 落到目标。times 让峰值卡在 45%
+                    y: [-14, -14 + f.dy * 0.42 - f.arc, f.dy - 14 + jitter * 0.3],
+                    scale: [0.5, 1.25, 1],
+                    opacity: [0, 1, 1],
+                    rotate: f.spin,
+                  }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  transition={{
+                    duration: 0.55,
+                    delay,
+                    // 横移匀速，纵向按关键帧走 —— 两条曲线不一样才有重量
+                    x: { duration: 0.55, delay, ease: "linear" },
+                    y: { duration: 0.55, delay, times: [0, 0.45, 1], ease: "easeOut" },
+                    rotate: { duration: 0.55, delay, ease: "linear" },
+                    opacity: { duration: 0.55, delay, times: [0, 0.1, 1] },
+                  }}
+                  onAnimationComplete={() => {
+                    // 最后一个落地才收摊。中途收会把还在飞的一起删掉
+                    if (last) dropReaction(f.id);
+                  }}
+                >
+                  {REACTION_META[f.kind].emoji}
+                </m.span>
+              );
+            }),
+          )}
+        </AnimatePresence>
+
+        {/* 砸中/落地那一下，钉在目标座位上 */}
+        <AnimatePresence>
+          {flights.map((f) => (
+            <ImpactMark key={`hit-${f.id}`} flight={f} />
+          ))}
+        </AnimatePresence>
       </div>
     </div>
   );

@@ -11,6 +11,7 @@ import { REJECT_LIMIT, type PublicPlayer } from "@avalon/shared";
 import { PlayerChip, PlayerChips } from "./PlayerChip.js";
 import { Button } from "./ui.js";
 import { useMemo } from "react";
+import { AnimatePresence, m } from "motion/react";
 import { useStore, type ResultCard } from "../store.js";
 
 /**
@@ -24,21 +25,39 @@ export const ResultOverlay = () => {
   const card = useStore((s) => s.result);
   const dismiss = useStore((s) => s.dismissResult);
   const seated = useStore((s) => s.state?.room.seats) ?? NO_PLAYERS;
-  if (!card) return null;
 
+  /*
+   * 用 AnimatePresence 是因为**退场只能这么做** ——
+   * 点「知道了」直接卸载的话弹窗是啪一下消失的，
+   * CSS 动画管不到已经从树上摘掉的元素。
+   */
   return (
-    <div className="backdrop-in fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-6">
-      <div
-        /* 换一张结果卡就重新挂载，入场动画重放一次 */
-        key={card.id}
-        className="overlay-in w-full max-w-sm rounded-2xl border border-line bg-surface p-5 text-center"
-      >
-        <Body card={card} seated={seated} />
-        <Button className="mt-5 w-full" onClick={dismiss}>
-          知道了
-        </Button>
-      </div>
-    </div>
+    <AnimatePresence>
+      {card ? (
+        <m.div
+          key="backdrop"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          <m.div
+            key={card.id}
+            className="w-full max-w-sm rounded-2xl border border-line bg-surface p-5 text-center"
+            initial={{ opacity: 0, scale: 0.94, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 6 }}
+            transition={{ type: "spring", stiffness: 380, damping: 30 }}
+          >
+            <Body card={card} seated={seated} />
+            <Button className="mt-5 w-full" onClick={dismiss}>
+              知道了
+            </Button>
+          </m.div>
+        </m.div>
+      ) : null}
+    </AnimatePresence>
   );
 };
 

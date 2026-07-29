@@ -284,9 +284,25 @@ function projectFor(game: Game, viewer: PlayerId | null): ClientGameView
 
 ### 8.4 动效
 
-**全部用 CSS keyframes，不引动画库。** 已有的献花砸蛋飞行就是这么写的，
-再引一套 Motion 只是多一种范式；而且这些动效都是「一次性重放」，
-靠 React key 变化重新挂载就能触发，不需要运行时编排。
+**两套并存，按能力分工，不是按喜好。**
+
+| 用 Motion（`LazyMotion` + `m.` + `domAnimation`） | 用 CSS keyframes |
+|---|---|
+| 需要**退场**动画：结果弹窗、浮层菜单、表情气泡 | 一次性小反馈：角标弹入、冠冕落下、进度点 |
+| 需要在**一个元素上给 x / y 各配一条曲线**：投掷抛物线 | 不需要编排、没有退场的 |
+| 需要**编排**：十连发的 stagger、任务牌逐张翻 | 长在每个座位上、量大的（不值得每格套组件） |
+
+分工的理由是能力差异，不是审美：
+
+- CSS 一个元素只有一个 `transform`，横向匀速 + 纵向带峰值合不到一起。
+  之前的抛物线是 `toss-x / toss-y / toss-spin` 三层套娃 —— Motion 一个元素搞定。
+- **CSS 管不到已经从树上摘掉的元素**，所以退场只能靠 `AnimatePresence`。
+  之前点「知道了」弹窗是啪一下消失的。
+- 清理时机曾经是个魔法数字：store 里的 `REACTION_MS` 必须手动等于 CSS 动画总时长。
+  现在飞完了组件调 `dropReaction`，那个定时器降级成纯兜底。
+
+带 `domAnimation` 而不是 `domMax`：拖拽和 layout 动画一个都没用到。
+`m.` 是按需加载的前提，写成 `motion.` 会把整个特性集打进包里。
 
 | 动效 | 触发 |
 |---|---|
@@ -302,7 +318,9 @@ function projectFor(game: Game, viewer: PlayerId | null): ClientGameView
 原则：**只给「刚发生了什么」加动画，不给「一直是什么」加** ——
 常驻元素动起来会持续抢注意力。
 
-`prefers-reduced-motion: reduce` 一律关掉动画：前庭敏感的人看这些缩放位移会真的不舒服，不是偏好问题。
+**两边都要接「减少动态效果」**：CSS 那边是 `@media (prefers-reduced-motion)`，
+Motion 那边是 `<MotionConfig reducedMotion="user">` —— 媒体查询管不到 JS 驱动的动画，
+只接一边的话关了动效还有一半在动。前庭敏感的人看这些缩放位移会真的不舒服，不是偏好问题。
 
 ---
 
