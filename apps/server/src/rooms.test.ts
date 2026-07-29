@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS, type Avatar } from "@avalon/shared";
 import { config } from "./config.js";
 import {
+  abortGame,
   applyAction,
   canReact,
   createRoom,
@@ -543,5 +544,36 @@ describe("踢人与移交", () => {
     leaveRoom(r, "p0", T0);
     expect(r.hostId).toBe("p1");
     expect(occupants(r)).toEqual(["p1", "p2", "p3", "p4"]);
+  });
+});
+
+describe("中途终止", () => {
+  it("只有房主能终止，且必须真的在对局中", () => {
+    const r = seated(5);
+    expect(abortGame(r, "p0", T0)).toMatchObject({ ok: false, error: "NOT_IN_GAME" });
+    startGame(r, "p0", T0);
+    expect(abortGame(r, "p1", T0)).toMatchObject({ ok: false, error: "NOT_HOST" });
+    expect(abortGame(r, "p0", T0).ok).toBe(true);
+  });
+
+  it("终止后退回等待页：座位和设置留着，准备清空", () => {
+    const r = seated(7);
+    setSettings(r, "p0", { ...DEFAULT_SETTINGS, ladyOfTheLake: true }, T0);
+    for (let i = 0; i < 7; i++) setReady(r, `p${i}`, true, T0);
+    startGame(r, "p0", T0);
+
+    abortGame(r, "p0", T0);
+    expect(r.game).toBeNull();
+    expect(occupants(r)).toHaveLength(7);
+    expect(r.settings.ladyOfTheLake).toBe(true);
+    // 重新准备一遍才能再开 —— 中途散了总有人要离桌
+    expect(startBlockedReason(r)).toContain("没准备");
+  });
+
+  it("终止的局不该留下任何胜负 —— 没打完就没有结果可归档", () => {
+    const r = seated(5);
+    startGame(r, "p0", T0);
+    abortGame(r, "p0", T0);
+    expect(r.game).toBeNull();
   });
 });

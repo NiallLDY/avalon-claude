@@ -118,6 +118,8 @@ export const CLIENT_EVENTS = {
   "room:transferHost": z.object({ playerId: playerIdSchema }),
   "game:start": z.object({}),
   /** 再来一局 = 退回等待页。任何在座玩家都能发，没有参数 */
+  /** 房主中途终止本局，回到等待页 */
+  "game:abort": z.object({}),
   "game:restart": z.object({}),
   "game:action": z.object({ action: clientActionSchema }),
   /** 献花 / 砸蛋。座位号由服务端按连接身份填，客户端只说扔给谁 */

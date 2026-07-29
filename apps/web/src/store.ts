@@ -199,6 +199,7 @@ const ERROR_TEXT: Record<string, string> = {
   INVALID_LADY_TARGET: "这个人不能被查验",
   EARLY_ASSASSINATION_UNAVAILABLE: "提前刺杀还没解锁",
   GAME_OVER: "这局已经结束",
+  GAME_ABORTED: "房主终止了这一局",
   SWAP_TARGET_BUSY: "对方正在处理别的换座请求",
   NO_PENDING_SWAP: "这个换座请求已经失效了",
 };

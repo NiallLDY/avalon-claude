@@ -380,7 +380,11 @@ export const SeatBoard = ({
                   </span>
                 ) : null}
 
-                {/* 表情包气泡：从他头顶冒出来，飘一会儿散掉 */}
+                {/*
+                  表情包气泡**朝屏幕中间弹**：左列的人显示在头像右边，右列的在左边。
+                  顶在头顶上的话，上排座位会飘出棋盘边界，而且容易压住邻座的头像。
+                  这和点头像弹出的小浮层是同一条规则。
+                */}
                 <AnimatePresence>
                 {emotes
                   .filter((e) => e.fromSeat === seat)
@@ -391,13 +395,15 @@ export const SeatBoard = ({
                     return (
                       <m.span
                         key={e.id}
-                        className="pointer-events-none absolute -top-1 left-1/2 z-30 flex w-max
-                          -translate-x-1/2 flex-col items-center gap-0.5 rounded-xl border
-                          border-line bg-surface px-1.5 py-1 shadow-lg"
-                        initial={{ opacity: 0, y: "-70%", scale: 0.6 }}
-                        animate={{ opacity: 1, y: "-100%", scale: 1 }}
-                        exit={{ opacity: 0, y: "-130%", scale: 0.9 }}
-                        transition={{ type: "spring", stiffness: 460, damping: 24 }}
+                        className={`pointer-events-none absolute top-1/2 z-30 flex w-max
+                          -translate-y-1/2 flex-col items-center gap-0.5 rounded-xl border
+                          border-line bg-surface px-1.5 py-1 shadow-lg
+                          ${seat < rows ? "left-full ml-1.5" : "right-full mr-1.5"}`}
+                        /* 从头像那一侧滑出来，方向和位置对得上 */
+                        initial={{ opacity: 0, x: seat < rows ? -10 : 10, scale: 0.7 }}
+                        animate={{ opacity: 1, x: 0, scale: 1 }}
+                        exit={{ opacity: 0, x: seat < rows ? -6 : 6, scale: 0.9 }}
+                        transition={{ type: "spring", stiffness: 460, damping: 26 }}
                       >
                         <img
                           src={`/art/roles/emotes/${meta.art}.webp`}
@@ -407,7 +413,8 @@ export const SeatBoard = ({
                             ev.currentTarget.style.display = "none";
                           }}
                         />
-                        <span className="max-w-[6rem] truncate text-[0.6rem] leading-none text-ink">
+                        {/* 气泡里也不截断：把梗截掉就没意义了 */}
+                        <span className="max-w-[5.5rem] text-center text-[0.6rem] leading-tight text-ink">
                           {meta.text}
                         </span>
                       </m.span>

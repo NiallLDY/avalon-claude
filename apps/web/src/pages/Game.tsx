@@ -163,10 +163,11 @@ const PHASE_HINT: Record<string, string> = {
 };
 
 export const Game = () => {
-  const { state, act, react, emote, leaveRoom } = useStore();
+  const { state, act, react, emote, emit, leaveRoom } = useStore();
   const [picked, setPicked] = useState<number[]>([]);
   const [sheet, setSheet] = useState<"role" | "report" | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [confirmAbort, setConfirmAbort] = useState(false);
   /** 正要朝谁扔东西。null = 没在扔 */
   const [reactTarget, setReactTarget] = useState<number | null>(null);
   const [burst, setBurst] = useState(false);
@@ -412,9 +413,48 @@ export const Game = () => {
               留下
             </Button>
             <Button tone="red" className="flex-1" onClick={leaveRoom}>
-              离开
+              我自己离开
             </Button>
           </div>
+
+          {/*
+            终止整局只给房主，而且**和「自己离开」分开放** ——
+            一个是我走，一个是全场散，混在一起早晚有人点错。
+          */}
+          {isHost ? (
+            <div className="mt-2 space-y-2 border-t border-line pt-3">
+              {confirmAbort ? (
+                <div className="rounded-xl border border-red/50 bg-red/10 p-3">
+                  <p className="mb-2 text-sm">
+                    这一局作废，所有人回等待页。人数、座位、规则都留着，重新准备就能再开。
+                  </p>
+                  <p className="mb-2 text-xs text-ink-mute">
+                    没打完的局不计入战绩，也不会出现在对局记录里。
+                  </p>
+                  <div className="flex gap-2">
+                    <Button tone="ghost" className="flex-1" onClick={() => setConfirmAbort(false)}>
+                      算了
+                    </Button>
+                    <Button
+                      tone="red"
+                      className="flex-1"
+                      onClick={() => {
+                        emit("game:abort");
+                        setConfirmAbort(false);
+                        setConfirmLeave(false);
+                      }}
+                    >
+                      确认终止
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button tone="ghost" className="w-full" onClick={() => setConfirmAbort(true)}>
+                  终止这一局（房主）
+                </Button>
+              )}
+            </div>
+          ) : null}
         </div>
       </Sheet>
     </div>

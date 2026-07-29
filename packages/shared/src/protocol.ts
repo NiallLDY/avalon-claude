@@ -94,6 +94,7 @@ export const CLIENT_EVENT_NAMES = [
   "room:kick",
   "room:transferHost",
   "game:start",
+  "game:abort",
   "game:restart",
   "game:action",
   /** 献花 / 砸鸡蛋。纯玩梗，不影响任何规则 */

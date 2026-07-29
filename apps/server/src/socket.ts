@@ -20,6 +20,7 @@ import type { Registry } from "./registry.js";
 import type { Store } from "./store.js";
 import type { Records } from "./records.js";
 import {
+  abortGame,
   advanceAutomatically,
   applyAction,
   canReact,
@@ -393,6 +394,21 @@ export const attachSocket = (
       const result = startGame(room, socket.data.playerId, now());
       reply(socket, result, room);
       if (result.ok) pushLobby();
+    });
+
+    on("game:abort", () => {
+      const room = currentRoom(socket);
+      if (!room) return;
+      const result = abortGame(room, socket.data.playerId, now());
+      if (result.ok) {
+        // 牌桌突然回到等待页，得让所有人知道是谁按的、为什么
+        io.to(`room:${room.id}`).emit("error", {
+          code: "GAME_ABORTED",
+          message: "房主终止了这一局",
+        });
+        pushLobby();
+      }
+      reply(socket, result, room);
     });
 
     on("game:restart", () => {

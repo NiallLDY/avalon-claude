@@ -149,6 +149,20 @@ test("拍完整一局", async ({ browser }) => {
       await shot(host, "献花砸蛋-飞在半路");
       await host.waitForTimeout(300);
       await shot(host, "献花砸蛋-砸中");
+
+      // 左右两列各发一个表情包，验气泡是不是朝屏幕中间弹的
+      for (const seat of [0, pages.length - 1]) {
+        const who = pages[seat]!;
+        await who.locator(`button[data-seat="${seat}"]`).click();
+        const pick = who.getByRole("button", { name: "我信你个鬼" });
+        if (await pick.isVisible().catch(() => false)) {
+          await shot(who, "表情包-菜单");
+          await pick.click();
+        } else {
+          await who.keyboard.press("Escape");
+        }
+      }
+      await shot(host, "表情包-气泡");
     }
 
     // 依次点座位直到凑够人数

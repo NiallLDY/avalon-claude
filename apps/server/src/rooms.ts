@@ -601,6 +601,27 @@ export const startGame = (room: Room, actorId: string, now: number): RoomResult 
 };
 
 /**
+ * 房主中途终止本局，退回等待页。座位和设置都留着。
+ *
+ * 和 `reopenRoom` 的区别：那个只在终局后可用、任何在座玩家都能点；
+ * 这个是**对局进行中**掀桌，所以只有房主能做，前端还要二次确认。
+ *
+ * **不归档、不计战绩** —— 没打完的局没有胜负，硬塞进排行榜会让
+ * 「带狼上车率」这类指标变得没法解释。少数人中途退出就重开一局，
+ * 那些局本来就不该算数。
+ */
+export const abortGame = (room: Room, actorId: string, now: number): RoomResult => {
+  if (!isHost(room, actorId)) return err("NOT_HOST");
+  if (room.game === null) return err("NOT_IN_GAME");
+
+  room.game = null;
+  clearReady(room);
+  room.pendingSwap = null;
+  touch(room, now);
+  return ok(undefined);
+};
+
+/**
  * 再来一局：把房间**退回等待页**，不直接发牌。
  *
  * 两个刻意的选择：

@@ -111,7 +111,8 @@ export const EmoteMenu = ({
   onClose: () => void;
 }) => (
   <Panel anchor={anchor} onClose={onClose}>
-      <div className="grid max-w-[13.5rem] grid-cols-4 gap-1">
+      {/* items-start：每格从顶上排起，图标在同一条水平线上 */}
+      <div className="grid max-w-[14.5rem] grid-cols-4 items-start gap-1">
         {EMOTES.map((e) => (
           <button
             key={e.id}
@@ -119,7 +120,7 @@ export const EmoteMenu = ({
             aria-label={e.text}
             title={e.text}
             onClick={() => onPick(e.id)}
-            className="flex flex-col items-center gap-0.5 rounded-xl p-1 transition
+            className="flex flex-col items-center gap-1 rounded-xl p-1 transition
               active:scale-90 active:bg-ink/10"
           >
             <img
@@ -132,7 +133,15 @@ export const EmoteMenu = ({
                 ev.currentTarget.style.visibility = "hidden";
               }}
             />
-            <span className="w-full truncate text-center text-[0.55rem] leading-tight text-ink-mute">
+            {/*
+              文字放两行，不截断 —— 「刺客你看我干嘛」截成「刺客你看…」就没梗了。
+              高度写死成两行：短文案也占两行的位置，
+              否则一行的和两行的挤在一起，图标会上下交错。
+            */}
+            <span
+              className="flex h-[1.9rem] w-full items-start justify-center text-center
+                text-[0.55rem] leading-[0.95rem] text-ink-mute"
+            >
               {e.text}
             </span>
           </button>
