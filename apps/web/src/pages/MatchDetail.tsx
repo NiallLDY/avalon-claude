@@ -4,8 +4,9 @@
  * 归档里存着逐轮的提名、每个人的票、任务结果和全员身份 ——
  * 之前页面上只画了阵容和几个任务圆点，等于把数据存了却不给看。
  *
- * 唯一**不存也不显示**的是每张任务牌是谁放的（GAME.md Q5）。
- * 那是这局留在桌上的悬案，永久档案里也不揭。
+ * 失败牌是谁放的也在这里揭 —— **但只在这里**。对局途中它是能直接
+ * 判负的机密，下行视图里没有这个字段（CLAUDE.md 铁律 3）；档案写在
+ * 终局之后，那时阵容表已经把身份摊开了，说出座位号并不多给什么。
  */
 
 import { ROLES, type RoleId } from "@avalon/shared";
@@ -35,6 +36,8 @@ export interface MatchRecord {
     team: number[];
     failCount: number;
     success: boolean;
+    /** 出失败牌的座位。这个改动之前归档的老对局没有这项 */
+    failedBy?: number[];
   }[];
   proposals: {
     roundIndex: number;
@@ -155,6 +158,20 @@ export const MatchDetail = ({ match }: { match: MatchRecord }) => {
               )}
             </header>
 
+            {/* 失败牌是谁放的。老档案没记，如实说没记，别装作没人放 */}
+            {mission && mission.failCount > 0 ? (
+              <p className="mb-1.5 flex flex-wrap items-center gap-1">
+                <span className="text-[0.62rem] text-ink-mute">失败牌来自</span>
+                {mission.failedBy ? (
+                  mission.failedBy.map((seat) => (
+                    <Chip key={seat} seat={seat} seats={match.seats} tone="red" showNick />
+                  ))
+                ) : (
+                  <span className="text-[0.62rem] text-ink-mute">当时没记录</span>
+                )}
+              </p>
+            ) : null}
+
             <ul className="space-y-1.5">
               {proposals.map((p) => (
                 <li key={p.attempt} className="space-y-1">
@@ -192,7 +209,7 @@ export const MatchDetail = ({ match }: { match: MatchRecord }) => {
       })}
 
       <p className="text-center text-[0.62rem] text-ink-mute">
-        谁放的失败牌不记录 —— 这局的悬案留在桌上
+        失败牌只在这里揭晓 —— 对局进行时谁都看不到
       </p>
       <p className="text-center text-[0.62rem] text-ink-mute">
         {blueWon ? "蓝方" : "红方"}获胜 · {match.playerCount} 人

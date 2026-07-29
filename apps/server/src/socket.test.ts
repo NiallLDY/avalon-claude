@@ -367,8 +367,13 @@ describe("一整局", () => {
       expect(c.state!.game!.outcome!.winner).toBe("BLUE");
       // 终局揭晓全员身份
       expect(c.state!.game!.reveal).toHaveLength(5);
-      // 但出牌人映射依然不给
+      /*
+       * 但出牌人**在对局中任何时刻都不给，终局这一屏也不给**。
+       * 想知道谁放的失败牌，只能事后翻对局记录（records.ts 的 failedBy）——
+       * 那是另一条线，走不到这里。
+       */
       expect(JSON.stringify(c.state!.game)).not.toContain("cardsBySeat");
+      expect(JSON.stringify(c.state!.game)).not.toContain("failedBy");
     }
 
     // ── 再来一局 ──

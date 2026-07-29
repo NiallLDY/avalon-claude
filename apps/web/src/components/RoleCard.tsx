@@ -78,6 +78,12 @@ export const RoleCard = ({
           {revealed ? (
             <>
               <span
+                /*
+                 * 给测试一个准星。翻牌后的视野区会写出别人的角色名
+                 * （派西维尔看得到「莫甘娜」），拿整张卡的文字去认自己是谁必错。
+                 * 只是本人已经看到的信息，标出来不多泄漏什么。
+                 */
+                data-my-side={meta.side}
                 className={`font-display text-2xl leading-none
                   ${meta.side === "RED" ? "text-red" : "text-blue"}`}
               >

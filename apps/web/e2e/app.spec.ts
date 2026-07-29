@@ -391,7 +391,6 @@ test.describe("终局", () => {
 
     // 打到终局最快的路子是连续 5 次流局 —— 红方直接赢，不用打完三车任务
     for (let round = 0; round < 5; round++) {
-      await expect(host.getByText(/挑 \d+ 个人/)).toBeVisible();
       let leader = host;
       for (const p of pages) {
         // 还没选够人时按钮是「选 N 个人」，选够了才变成「确认 N」
@@ -725,7 +724,6 @@ test.describe("湖中女神", () => {
 
     /** 打一轮：队长全选前几个，全票通过，能出成功就出成功 */
     const playRound = async () => {
-      await expect(host.getByText(/挑 \d+ 个人/)).toBeVisible();
       let leader = host;
       for (const p of pages) {
         if ((await p.locator("main").innerText()).includes("选 ")) {
@@ -819,11 +817,22 @@ test.describe("对局记录", () => {
     }
     for (const p of pages) await p.getByRole("button", { name: "准备" }).click();
     await host.getByRole("button", { name: "开始游戏" }).click();
-    for (const p of pages) {
-      await p.getByRole("dialog").getByRole("button", { name: /点击查看身份/ }).click();
+    /*
+     * 看牌，顺手记下谁是红方。
+     *
+     * 后面要让某一轮真的挂掉，才验得了「失败牌来自谁」。靠运气等红方
+     * 自己上车的话，这条断言有几成概率是空跑的 —— 空跑的断言等于没有。
+     */
+    const redSeats: number[] = [];
+    for (const [i, p] of pages.entries()) {
+      const dialog = p.getByRole("dialog");
+      await dialog.getByRole("button", { name: /点击查看身份/ }).click();
+      // 认自己的阵营只能看这一个元素 —— 卡上的视野区会写出别人的角色名
+      if (await dialog.locator('[data-my-side="RED"]').count()) redSeats.push(i);
       await p.keyboard.press("Escape");
-      await expect(p.getByRole("dialog")).toHaveCount(0);
+      await expect(dialog).toHaveCount(0);
     }
+    expect(redSeats, "五人局该有两个红方").toHaveLength(2);
 
     const dismiss = async () => {
       for (const p of pages) {
@@ -834,25 +843,38 @@ test.describe("对局记录", () => {
       if (await skip.isVisible().catch(() => false)) await skip.click();
     };
 
-    // 打到终局：三轮全成功 → 刺杀
-    for (let round = 0; round < 3; round++) {
-      await expect(host.getByText(/挑 \d+ 个人/)).toBeVisible();
+    /*
+     * 打到终局。**轮数不能写死** —— 中间挂掉一轮，蓝方就得打到第 4 轮
+     * 才凑够三胜，写死 3 轮会停在还没进刺杀的地方。
+     */
+    for (let round = 0; round < 5; round++) {
+      if ((await host.getByText(/挑 \d+ 个人/).count()) === 0) break;
       let leader = host;
       for (const p of pages) {
         if ((await p.locator("main").innerText()).includes("选 ")) { leader = p; break; }
       }
       const need = Number((await leader.getByText(/挑 \d+ 个人/).textContent())!.match(/\d+/)![0]);
-      const seats = leader.locator("button[data-seat]:not([disabled])");
-      for (let i = 0; i < need; i++) await seats.nth(i).click();
+      // 第 2 轮硬把一个红方带上车，让他有机会放失败牌
+      const picked = round === 1 ? [redSeats[0]!] : [];
+      for (let s = 0; picked.length < need; s++) if (!picked.includes(s)) picked.push(s);
+      for (const seat of picked) {
+        await leader.locator(`button[data-seat="${seat}"]`).click();
+      }
       await leader.getByRole("button", { name: /^确认 \d/ }).click();
       // 故意有人投反对，复盘里才看得出票型差异
       for (const [i, p] of pages.entries()) {
         await p.getByRole("button", { name: i === 4 ? "反对" : "赞成" }).click();
       }
       await dismiss();
+      // 第 2 轮让红方放一张失败牌 —— 复盘要能指出是谁放的
       for (const p of pages) {
-        const ok = p.getByRole("button", { name: "任务成功" });
-        if (await ok.isVisible().catch(() => false)) await ok.click();
+        const bad = p.getByRole("button", { name: "任务失败" });
+        const good = p.getByRole("button", { name: "任务成功" });
+        if (round === 1 && (await bad.isVisible().catch(() => false))) {
+          await bad.click();
+        } else if (await good.isVisible().catch(() => false)) {
+          await good.click();
+        }
       }
       await dismiss();
     }
@@ -894,10 +916,18 @@ test.describe("对局记录", () => {
     expect(await no.count(), "看不到反对票").toBeGreaterThan(0);
     // 任务结果
     await expect(host.getByText(/任务成功 · 0 张失败牌/).first()).toBeVisible();
+    // 失败牌是谁放的 —— 只有对局记录里揭晓
+    await expect(host.getByText(/任务失败 · 1 张失败牌/)).toBeVisible();
+    // 失败牌是谁放的 —— 只有对局记录里揭晓，且必须指到那个红方
+    await expect(host.getByText("失败牌来自")).toBeVisible();
+    await expect(host.getByText("当时没记录")).toHaveCount(0);
+    await expect(host.locator("p", { hasText: "失败牌来自" }).first()).toContainText(
+      `记录${redSeats[0]! + 1}`,
+    );
     // 被刺杀的人
     await expect(host.getByText("刺客选择了")).toBeVisible();
     // 出牌人依然不记录
-    await expect(host.getByText(/悬案留在桌上/)).toBeVisible();
+    await expect(host.getByText(/对局进行时谁都看不到/)).toBeVisible();
 
     for (const c of ctxs) await c.close();
   });

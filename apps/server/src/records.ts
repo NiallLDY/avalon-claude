@@ -62,6 +62,13 @@ export interface MatchRecord {
     readonly team: readonly number[];
     readonly failCount: number;
     readonly success: boolean;
+    /**
+     * 出了失败牌的座位，升序。**只在档案里有** —— 对局中的下行视图
+     * （`PublicMissionSummary`）永远没有这个字段，铁律 3 原样不动。
+     *
+     * 老档案没有这一项，读出来是 undefined，页面按「不记录」处理。
+     */
+    readonly failedBy?: readonly number[];
   }[];
   readonly proposals: readonly {
     readonly roundIndex: number;
@@ -125,7 +132,22 @@ export const createRecords = (redis: Redis) => {
           team: [...m.team],
           failCount: m.failCount,
           success: m.success,
-          // 刻意不含 cardsBySeat —— 终局也不公开谁放的失败牌（GAME.md Q5）
+          /*
+           * 谁放的失败牌 —— 只落进档案，复盘时才看得到。
+           *
+           * 敢公开是因为归档发生在终局之后，那时 `seats` 已经把全员身份
+           * 摊开了，而失败牌只有红方能放：说出座位号，并不比阵容表多给出
+           * 什么。对局**途中**它照样是能直接判负的机密，projectFor 里
+           * 那段逐字段裁剪一个字都没改。
+           *
+           * 存座位而不是存 cardsBySeat 整个映射：出成功牌的人不该被记一笔，
+           * 那是没有信息量的默认动作。
+           */
+          // 注意极性：cardsBySeat 里 true 是**成功**牌，失败牌是 false
+          failedBy: Object.entries(m.cardsBySeat)
+            .filter(([, success]) => !success)
+            .map(([seat]) => Number(seat))
+            .sort((a, b) => a - b),
         })),
         proposals: game.proposals.map((p) => ({
           roundIndex: p.roundIndex,
