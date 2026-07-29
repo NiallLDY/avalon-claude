@@ -651,3 +651,41 @@ test.describe("排行榜", () => {
     await expect(page.getByRole("button", { name: "开房间" })).toBeVisible();
   });
 });
+
+test.describe("长昵称", () => {
+  test("12 个字的昵称要完整显示，不截断", async ({ page }) => {
+    const long = "一二三四五六七八九十甲乙"; // 正好 NICK_MAX
+    await openApp(page, long);
+    await createRoom(page);
+    await sit(page, 0);
+
+    const nick = page.locator('button[data-seat="0"] .line-clamp-2');
+    await expect(nick).toHaveText(long);
+
+    /*
+     * 「看得见」不等于「显示完整」—— 截断的元素文本内容也还在。
+     * 之前号牌和昵称挤一行，昵称只剩 50px，12 个字要 119px，
+     * 实际只显示得下五个字。所以要量的是**有没有溢出**。
+     */
+    const clipped = await nick.evaluate(
+      (el) => el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1,
+    );
+    expect(clipped, "昵称被截断了").toBe(false);
+  });
+
+  test("10 人局配长昵称也不能把主界面撑到要滚动", async ({ page }) => {
+    await openApp(page, "一二三四五六七八九十甲乙");
+    await createRoom(page);
+    await sit(page, 0);
+    await page.getByRole("button", { name: "设置" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "10", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    // 铁律 4：主界面单屏不滚动。10 人 5 行 + 两行昵称是最挤的情况
+    const overflow = await page.evaluate(
+      () => document.body.scrollHeight - window.innerHeight,
+    );
+    expect(overflow, "座位区把页面撑出了一屏").toBeLessThanOrEqual(0);
+  });
+});

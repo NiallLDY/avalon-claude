@@ -339,7 +339,7 @@ export const SeatBoard = ({
                 disabled={!canSelect}
                 onClick={() => onSelect?.(seat)}
                 style={cell(seat)}
-                className={`flex min-h-0 w-[5rem] flex-col items-center justify-center gap-0.5
+                className={`flex min-h-0 w-[5.4rem] flex-col items-center justify-center gap-1
                   self-center rounded-xl p-1 transition
                   ${canSelect ? "active:scale-95" : "pointer-events-none opacity-60"}`}
               >
@@ -351,7 +351,7 @@ export const SeatBoard = ({
                 >
                   {canSelect ? "坐这" : "空"}
                 </span>
-                <span className="flex w-full items-center justify-center gap-1">
+                <span className="flex h-[1.15rem] items-center justify-center">
                   <span className="flex h-[1.15rem] min-w-[1.15rem] items-center justify-center
                     rounded bg-surface-2 px-1 text-[0.72rem] font-bold leading-none tabular-nums
                     text-ink-mute ring-1 ring-line">
@@ -371,7 +371,7 @@ export const SeatBoard = ({
               disabled={!canSelect && !canReact}
               onClick={() => (canSelect ? onSelect?.(seat) : onReact?.(seat))}
               style={cell(seat)}
-              className={`flex min-h-0 w-[5rem] flex-col items-center justify-center gap-0.5
+              className={`flex min-h-0 w-[5.4rem] flex-col items-center justify-center gap-1
                 self-center rounded-xl p-1 transition
                 ${canSelect || canReact ? "active:scale-95" : "pointer-events-none"}
                 ${isSelected ? "bg-gold/15 ring-2 ring-gold" : ""}`}
@@ -513,35 +513,40 @@ export const SeatBoard = ({
                     掉线
                   </span>
                 ) : null}
+
+                {/*
+                  号牌钉在头像左下角，**不和昵称抢同一行**。
+                  之前两个挤在一行里，昵称只剩 50px —— 12 个字的名字要 119px，
+                  被截得只剩五个字。号码本来就该贴着脸，这样也更好认。
+                */}
+                <span
+                  className={`absolute -bottom-1 -left-1 flex h-[1.15rem] min-w-[1.15rem]
+                    items-center justify-center rounded px-1 text-[0.72rem] font-bold
+                    leading-none tabular-nums ring-2 ring-ground
+                    ${isLeader
+                      ? "bg-gold text-ground"
+                      : isSelf
+                        ? "bg-ink text-ground"
+                        : "bg-surface-2 text-ink-soft"}`}
+                >
+                  {seat + 1}
+                </span>
               </span>
 
               {/*
                 座位号 + 昵称。线下全靠座位号沟通 ——「3 号出的失败牌」「不上 5 号的车」，
                 所以号码要比昵称更显眼，做成一块号牌。
               */}
-              <span className="flex w-full items-center justify-center gap-1">
-                <span
-                  className={`flex h-[1.15rem] min-w-[1.15rem] shrink-0 items-center justify-center
-                    rounded px-1 text-[0.72rem] font-bold leading-none tabular-nums
-                    ${isLeader
-                      ? "bg-gold text-ground"
-                      : isSelf
-                        ? "bg-ink text-ground ring-1 ring-ink"
-                        : "bg-surface-2 text-ink-soft ring-1 ring-line"}`}
-                >
-                  {seat + 1}
-                </span>
-                {/*
-                  昵称照常显示 —— 自己那格也是。把昵称换成「你」等于把自己
-                  从桌上的名字体系里摘出去，别人喊你名字时反而对不上。
-                  「哪个是我」由号牌区分就够了（见上面 isSelf 的配色）。
-                */}
-                <span
-                  className={`min-w-0 truncate text-[0.62rem] leading-tight
-                    ${isSelf ? "text-ink" : "text-ink-mute"}`}
-                >
-                  {player.nick}
-                </span>
+              {/*
+                昵称独占整行，最多两行。自己那格也照常显示昵称 ——
+                换成「你」等于把自己从桌上的名字体系里摘出去，
+                别人喊你名字时反而对不上。「哪个是我」由号牌配色区分。
+              */}
+              <span
+                className={`line-clamp-2 w-full text-center text-[0.62rem] leading-[0.85rem]
+                  ${isSelf ? "font-medium text-ink" : "text-ink-mute"}`}
+              >
+                {player.nick}
               </span>
 
               {/* 终局才揭晓身份 */}
