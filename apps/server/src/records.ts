@@ -10,8 +10,8 @@
  */
 
 import type { Redis } from "ioredis";
-import type { Avatar, Outcome } from "@avalon/shared";
-import { addStats, emptyStats, seatStats, type PlayerStats } from "@avalon/engine";
+import type { Avatar, Outcome, RoleId, Side } from "@avalon/shared";
+import { addStats, emptyStats, seatStats, statsFrom, type PlayerStats } from "@avalon/engine";
 import type { GameState } from "@avalon/engine";
 import { logger } from "./logger.js";
 import type { Room } from "./rooms.js";
@@ -236,6 +236,94 @@ export const createRecords = (redis: Redis) => {
     }
   };
 
+  /**
+   * 按**当前**口径把所有玩家的累计战绩从归档重算一遍。
+   *
+   * 为什么需要：战绩是归档那一刻算好、累加进玩家档案的，档案里只留下加总的数字。
+   * 所以改了指标口径（比如「梅林被考验过」的判据）之后，**老局的数字不会自己变** ——
+   * 只能拿档案重放一遍。档案里存了 outcome、每个座位的 roleId/side、
+   * 每次提名的 team/votes，正好够算全部指标。
+   *
+   * 用 SCAN 而不是 MATCH_INDEX：那个列表被 ltrim 到 2000 条，
+   * 超出的对局键还在，只是不在索引里了 —— 重算要连它们一起算。
+   *
+   * 幂等：整个重建，不是在旧值上累加。跑几遍结果都一样。
+   */
+  const rebuildStats = async (): Promise<{ matches: number; players: number }> => {
+    const ids: string[] = [];
+    let cursor = "0";
+    do {
+      const [next, keys] = await redis.scan(
+        cursor,
+        "MATCH",
+        matchKey("*"),
+        "COUNT",
+        500,
+      );
+      cursor = next;
+      ids.push(...keys);
+    } while (cursor !== "0");
+
+    const totals = new Map<string, PlayerStats>();
+    // 昵称头像取**最后一局**用的那份，和 archive 的口径一致
+    const latest = new Map<string, { at: number; nick: string; avatar: Avatar }>();
+    let counted = 0;
+
+    for (const key of ids) {
+      const raw = await redis.get(key);
+      if (!raw) continue;
+      let m: MatchRecord;
+      try {
+        m = JSON.parse(raw) as MatchRecord;
+      } catch {
+        logger.warn({ key }, "归档解析失败，跳过");
+        continue;
+      }
+
+      const perSeat = statsFrom({
+        playerCount: m.playerCount,
+        mode: m.mode,
+        outcome: m.outcome,
+        roles: m.seats.map((x) => x.roleId as RoleId),
+        sides: m.seats.map((x) => x.side as Side),
+        proposals: m.proposals,
+      });
+
+      for (const seat of m.seats) {
+        if (!seat.playerId) continue;
+        totals.set(
+          seat.playerId,
+          addStats(totals.get(seat.playerId) ?? emptyStats(), perSeat[seat.seat]!),
+        );
+        const prev = latest.get(seat.playerId);
+        if (!prev || m.finishedAt > prev.at) {
+          latest.set(seat.playerId, { at: m.finishedAt, nick: seat.nick, avatar: seat.avatar });
+        }
+      }
+      counted++;
+    }
+
+    const tx = redis.multi();
+    for (const [playerId, stats] of totals) {
+      const prev = await readPlayer(playerId);
+      const last = latest.get(playerId);
+      const next: PlayerRecord = {
+        id: playerId,
+        // 档案里的昵称可能比最后一局更新（改过名），优先留档案里那个
+        nick: prev?.nick ?? last?.nick ?? "无名氏",
+        avatar: prev?.avatar ?? last?.avatar ?? { seed: playerId, bg: "2a3145" },
+        updatedAt: prev?.updatedAt ?? last?.at ?? 0,
+        stats,
+      };
+      tx.set(playerKey(playerId), JSON.stringify(next));
+      tx.zadd(PLAYER_INDEX, stats.games, playerId);
+    }
+    await tx.exec();
+
+    logger.info({ matches: counted, players: totals.size }, "战绩已按当前口径重算");
+    return { matches: counted, players: totals.size };
+  };
+
   const match = async (id: string): Promise<MatchRecord | null> => {
     try {
       const raw = await redis.get(matchKey(id));
@@ -253,7 +341,7 @@ export const createRecords = (redis: Redis) => {
     return { profile, matches: all.filter((m) => m.seats.some((s) => s.playerId === id)).slice(0, 30) };
   };
 
-  return { archive, leaderboard, recentMatches, match, player, readPlayer };
+  return { archive, leaderboard, recentMatches, match, player, readPlayer, rebuildStats };
 };
 
 export type Records = ReturnType<typeof createRecords>;

@@ -19,11 +19,11 @@ Melbourne 阿瓦隆 —— 线下面对面玩阿瓦隆时使用的**在线发牌
 | `packages/shared` | 常量表、角色元数据、客户端类型、画风注册表；Zod schema 在 `@avalon/shared/schemas` 子入口（**只有服务端 import**，别打进前端） |
 | `packages/engine` | `setup` 发牌 / `vision` 视野 / `machine` 状态机 / `projection` 视图裁剪 |
 | `apps/server` | Fastify + Socket.IO + Redis 快照 + 限流 |
-| `apps/server/src/records.ts` | 玩家档案 + 对局归档 + 排行榜。**唯一持久化的东西**，只在 GAME_OVER 之后写 |
+| `apps/server/src/records.ts` | 玩家档案 + 对局归档 + 排行榜。**唯一持久化的东西**，只在 GAME_OVER 之后写。改了 `engine/stats.ts` 的指标口径后要跑 `./scripts/rebuild-stats.sh` 重算老局 |
 | `apps/web` | React 单屏客户端，PWA。规则页是**唯一允许滚动**的页面 |
 | `assets/roles/` | 角色卡插画，生成流水线见 `scripts/art/` |
 
-213 个 vitest + 21 个 Playwright e2e。部署见 `README.md`。
+252 个 vitest + 30 个 Playwright e2e。部署见 `README.md`。
 
 ## 技术栈速查
 
@@ -54,6 +54,16 @@ Melbourne 阿瓦隆 —— 线下面对面玩阿瓦隆时使用的**在线发牌
 ./scripts/e2e.sh     # Playwright 真浏览器测试（iPhone 视口）
 ./scripts/sh.sh      # 进容器 shell
 ```
+
+改了指标口径之后，服务器上还要跑一次：
+
+```bash
+./scripts/rebuild-stats.sh   # 按当前口径从对局归档重算玩家战绩
+```
+
+战绩是**归档那一刻算好、加进玩家档案**的，档案里只留加总的数字 ——
+改口径不会让老局的数字自己变。这条命令拿归档重放一遍；
+只重写玩家档案，对局归档只读，重复跑结果一样。
 
 > **改前端就要跑 `./scripts/e2e.sh`。** vitest 那层直接走 socket 协议，
 > 绕开了浏览器 —— 客户端状态管理的问题（刷新掉房、输入框误报、连接状态误判）

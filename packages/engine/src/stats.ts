@@ -74,14 +74,37 @@ const ZERO: SeatStats = {
 const teamHasEvil = (team: readonly number[], sides: readonly Side[]): boolean =>
   team.some((seat) => sides[seat] === "RED");
 
-export const seatStats = (state: GameState): readonly SeatStats[] => {
-  if (state.phase !== "GAME_OVER" || !state.outcome) {
-    throw new Error("战绩只能在对局结束后统计");
-  }
-  const { outcome, sides, roles, proposals } = state;
+/**
+ * 算战绩需要的**全部**输入。
+ *
+ * 刻意不收 `GameState` —— 归档里的 `MatchRecord` 也能凑出这几样，
+ * 于是「归档时算」和「事后按新口径重算」走的是同一份实现，不会漂移。
+ * 注意这里没有 missions：口径改成「有没有人真的开枪」之后就不需要了。
+ */
+export interface StatsInput {
+  readonly playerCount: number;
+  readonly mode: string;
+  readonly outcome: {
+    readonly winner: Side;
+    readonly reason: string;
+    readonly assassinatedSeat: number | null;
+  };
+  readonly roles: readonly RoleId[];
+  /** 终局阵营。兰斯洛特换过边的话和 roles 对不上 */
+  readonly sides: readonly Side[];
+  readonly proposals: readonly {
+    readonly leaderSeat: number;
+    readonly team: readonly number[];
+    readonly votes: readonly boolean[];
+    readonly approved: boolean;
+  }[];
+}
+
+export const statsFrom = (input: StatsInput): readonly SeatStats[] => {
+  const { outcome, sides, roles, proposals } = input;
   const merlinSeat = roles.indexOf("MERLIN" satisfies RoleId);
 
-  return Array.from({ length: state.playerCount }, (_, seat) => {
+  return Array.from({ length: input.playerCount }, (_, seat) => {
     const side = sides[seat]!;
     const won = side === outcome.winner;
 
@@ -114,7 +137,7 @@ export const seatStats = (state: GameState): readonly SeatStats[] => {
     // 刺杀：只算真的动了手那一次。没走到刺杀阶段就不计入分母
     const didAssassinate =
       outcome.assassinatedSeat !== null &&
-      roles[seat] === (state.settings.mode === "LANCELOT" ? "MORGANA" : "ASSASSIN");
+      roles[seat] === (input.mode === "LANCELOT" ? "MORGANA" : "ASSASSIN");
     const hit = didAssassinate && outcome.reason === "ASSASSINATION_HIT";
 
     const isMerlin = seat === merlinSeat;
@@ -147,6 +170,21 @@ export const seatStats = (state: GameState): readonly SeatStats[] => {
       asMerlin: merlinTested ? 1 : 0,
       merlinSurvived: merlinTested && outcome.reason !== "ASSASSINATION_HIT" ? 1 : 0,
     } satisfies SeatStats;
+  });
+};
+
+/** 归档那一刻从对局状态算。事后重算走 `statsFrom` —— 同一份实现 */
+export const seatStats = (state: GameState): readonly SeatStats[] => {
+  if (state.phase !== "GAME_OVER" || !state.outcome) {
+    throw new Error("战绩只能在对局结束后统计");
+  }
+  return statsFrom({
+    playerCount: state.playerCount,
+    mode: state.settings.mode,
+    outcome: state.outcome,
+    roles: state.roles,
+    sides: state.sides,
+    proposals: state.proposals,
   });
 };
 

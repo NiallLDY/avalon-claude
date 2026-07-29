@@ -54,6 +54,7 @@ const fakeRedis = () => {
 
   return {
     get: async (k: string) => kv.get(k) ?? null,
+    set: async (k: string, v: string) => void kv.set(k, v),
     mget: async (ks: string[]) => ks.map((k) => kv.get(k) ?? null),
     lrange: async (k: string, a: number, b: number) =>
       (lists.get(k) ?? []).slice(a, b < 0 ? undefined : b + 1),
@@ -63,6 +64,11 @@ const fakeRedis = () => {
         .map(([m]) => m)
         .slice(a, b < 0 ? undefined : b + 1),
     multi: () => tx,
+    // rebuildStats 用 SCAN 找归档 —— 这里一次返回全部，游标直接回 "0"
+    scan: async (_cursor: string, _m: string, pattern: string) => [
+      "0",
+      [...kv.keys()].filter((k) => k.startsWith(pattern.replace(/\*$/, ""))),
+    ],
   } as unknown as Parameters<typeof createRecords>[0];
 };
 
@@ -160,5 +166,75 @@ describe("归档", () => {
     for (const m of saved.missions) {
       expect(m.failedBy!.length).toBeLessThan(m.team.length + 1);
     }
+  });
+});
+
+describe("按当前口径重算战绩", () => {
+  /*
+   * 战绩是归档那一刻算好、加进玩家档案的，改了指标口径之后老局的数字不会自己变。
+   * rebuildStats 拿归档重放一遍 —— 这里验它算得对、且不动原始数据。
+   */
+  const archiveGames = async (n: number) => {
+    const redis = fakeRedis();
+    const records = createRecords(redis);
+    const ids: string[] = [];
+    for (let i = 0; i < n; i++) {
+      const room = playToGameOver();
+      const id = await records.archive(room, T0 + i * 1000);
+      expect(id).not.toBeNull();
+      ids.push(id!);
+    }
+    return { records, redis, ids };
+  };
+
+  /** 五个玩家的档案。leaderboard 有 5 局门槛，验累加得直接读档案 */
+  const profiles = async (records: ReturnType<typeof createRecords>) =>
+    Promise.all(SEATS.map((i) => records.readPlayer(`p${i}`)));
+
+  it("重算结果和归档时逐局累加的结果一致", async () => {
+    const { records } = await archiveGames(3);
+    const before = await profiles(records);
+    expect(before.every((x) => x?.stats.games === 3)).toBe(true);
+
+    const { matches, players } = await records.rebuildStats();
+    expect(matches).toBe(3);
+    expect(players).toBe(5);
+
+    // 口径没变的情况下，重算必须是恒等变换
+    expect(await profiles(records)).toEqual(before);
+  });
+
+  it("跑两遍结果一样 —— 是重建不是累加", async () => {
+    const { records } = await archiveGames(2);
+    await records.rebuildStats();
+    const once = await profiles(records);
+    await records.rebuildStats();
+    expect(await profiles(records)).toEqual(once);
+    // 局数没有翻倍
+    for (const p of once) expect(p!.stats.games).toBe(2);
+  });
+
+  it("只重写玩家档案，对局归档一个字节都不动", async () => {
+    const { records, ids } = await archiveGames(2);
+    const before = await Promise.all(ids.map((id) => records.match(id)));
+    await records.rebuildStats();
+    const after = await Promise.all(ids.map((id) => records.match(id)));
+    expect(after).toEqual(before);
+  });
+
+  it("玩家档案里是按旧口径算的错数字时，重算能把它修回来", async () => {
+    const { records, redis } = await archiveGames(2);
+    const victim = (await records.readPlayer("p0"))!;
+
+    // 直接改底层的键，模拟「上线新口径之前留下的旧数字」
+    const broken = { ...victim, stats: { ...victim.stats, asMerlin: 0, merlinSurvived: 0 } };
+    await (redis as unknown as { set: (k: string, v: string) => Promise<void> }).set(
+      `avalon:rec:v1:player:${victim.id}`,
+      JSON.stringify(broken),
+    );
+    expect((await records.readPlayer(victim.id))!.stats.asMerlin).toBe(0);
+
+    await records.rebuildStats();
+    expect((await records.readPlayer(victim.id))!.stats).toEqual(victim.stats);
   });
 });
