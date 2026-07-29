@@ -1,0 +1,55 @@
+{
+  "styleId": "emotes",
+  "displayName": "嘲讽表情包",
+  "note": "点自己头像发的表情包。刻意不用角色卡那套厚涂 —— 表情包要一眼看懂、要蠢、要能在 96px 上读出来，写实油画做不到这件事。统一贴纸风：粗描边、平涂、夸张表情、透明感背景。",
+
+  "suffix": "chibi sticker illustration, thick clean black outline, flat bold colors, exaggerated cartoon facial expression, simple uncluttered background with a soft radial glow, centered single character, readable at very small size, high contrast, no text, no lettering, no speech bubble, no watermark, square composition",
+
+  "palette": {
+    "BLUE": "colour palette of indigo, steel blue and warm parchment",
+    "RED": "colour palette of crimson, dark plum and warm parchment"
+  },
+
+  "roles": {
+    "naked-rush": {
+      "name": "三狼裸冲",
+      "side": "RED",
+      "subject": "a smug cartoon knight in dark armour shrugging with both palms up and a huge cocky grin, one eyebrow raised, absolutely unbothered"
+    },
+    "trust-me": {
+      "name": "我信你个鬼",
+      "side": "BLUE",
+      "subject": "a cartoon knight rolling his eyes so hard only the whites show, arms crossed, mouth in a flat skeptical line"
+    },
+    "speak-up": {
+      "name": "你倒是说话啊",
+      "side": "BLUE",
+      "subject": "a cartoon wizard with a long white beard leaning forward and cupping one hand behind his ear, eyes wide and impatient, waiting for an answer"
+    },
+    "again-you": {
+      "name": "又是你",
+      "side": "BLUE",
+      "subject": "a cartoon knight pointing accusingly straight at the viewer with a furious squint, other hand on hip"
+    },
+    "stop-acting": {
+      "name": "别演了",
+      "side": "RED",
+      "subject": "a cartoon hooded figure slow-clapping with a deeply unimpressed deadpan face, half-lidded eyes"
+    },
+    "this-is-fine": {
+      "name": "这波稳了",
+      "side": "BLUE",
+      "subject": "a cartoon knight giving an exaggerated confident thumbs up and a wink, sparkles around him, comically overconfident"
+    },
+    "why-me": {
+      "name": "刺客看我干嘛",
+      "side": "BLUE",
+      "subject": "a small cartoon knight sweating nervously and pointing at himself with both hands, eyes darting sideways, forced innocent smile"
+    },
+    "im-out": {
+      "name": "下把别叫我了",
+      "side": "RED",
+      "subject": "a cartoon knight face-palming with one gauntlet, shoulders slumped, utterly done with everyone"
+    }
+  }
+}

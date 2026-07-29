@@ -11,19 +11,24 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { ROLES, type ClientGameView, type PublicPlayer, type Reaction } from "@avalon/shared";
+import {
+  EMOTES,
+  REACTION_META,
+  ROLES,
+  type ClientGameView,
+  type PublicPlayer,
+  type Reaction,
+} from "@avalon/shared";
 import { Avatar } from "./Avatar.js";
 import { useStore } from "../store.js";
 
-const REACTION_EMOJI = { FLOWER: "🌹", EGG: "🥚" } as const;
-/** 落地那一下炸开的东西。花是撒开，蛋是砸烂 */
+
 /**
- * 落地那一下。**花和蛋不能共用一套** ——
- * 送花却让对方头像抖一下、再炸一朵星星，那是挨揍的语言，不是被送花的。
- * 蛋是砸：炸开 + 抖。花是落：花瓣轻轻绽开往上飘，头像不动。
+ * 落地那一下。**送花和挨砸不能共用一套** ——
+ * 送花却让对方头像抖一下、再炸一下，那是挨揍的语言。
+ * 砸：炸开 + 抖。花：轻轻绽开往上飘，头像不动。泼水：往下淌。
  */
-const REACTION_HIT = { FLOWER: "🌸", EGG: "💥" } as const;
-const REACTION_HIT_ANIM = { FLOWER: "toss-bloom", EGG: "toss-hit" } as const;
+const HIT_ANIM = { gift: "toss-bloom", hit: "toss-hit", splash: "toss-splash" } as const;
 
 /** 一次飞行：起点（相对棋盘）+ 到目标的位移。像素，量出来的 */
 interface Flight {
@@ -47,6 +52,8 @@ interface Props {
   readonly onSelect?: (seat: number) => void;
   /** 我的座位号；没入座时为 null。只用来标注，不影响排布顺序 */
   readonly selfSeat?: number | null;
+  /** 房主是谁。开局前在队长冠的位置显示 🏠，开局后让位给队长 */
+  readonly hostId?: string;
   /** 空位是否可点（等待页选座用） */
   readonly emptySelectable?: boolean;
   /**
@@ -56,6 +63,12 @@ interface Props {
    */
   readonly reactable?: readonly number[];
   readonly onReact?: (seat: number) => void;
+  /**
+   * 点头像后贴着它显示的小浮层。SeatBoard 量好位置交给调用方渲染 ——
+   * 位置知识在这里，内容知识在页面里。
+   */
+  readonly menuSeat?: number | null;
+  readonly renderMenu?: (anchor: { x: number; y: number; side: "left" | "right" }) => React.ReactNode;
   /** 两列中间的内容 */
   readonly children?: React.ReactNode;
 }
@@ -91,14 +104,18 @@ export const SeatBoard = ({
   selected = [],
   onSelect,
   selfSeat = null,
+  hostId,
   emptySelectable = false,
   reactable = [],
   onReact,
+  menuSeat = null,
+  renderMenu,
   children,
 }: Props) => {
   const rows = Math.max(Math.ceil(seats.length / 2), 1);
   const size = avatarSize(rows);
   const reactions = useStore((s) => s.reactions);
+  const emotes = useStore((s) => s.emotes);
 
   /*
    * 花和蛋要**从扔的人座位飞到目标座位**，所以得知道两个座位在屏幕上的实际位置。
@@ -184,12 +201,15 @@ export const SeatBoard = ({
           const canSelect = player === null ? emptySelectable : selectable.includes(seat);
           const isSelected = selected.includes(seat);
           const isLeader = game?.leaderSeat === seat;
+          const isHostSeat = hostId !== undefined && player?.id === hostId;
           const onTeam = game?.team?.includes(seat) ?? false;
           const act = actState(game, seat);
           // 选人优先：队长点头像是选队员，轮不到扔东西
           const canReact = !canSelect && reactable.includes(seat);
-          // 只有挨蛋才抖。被送花抖一下就成挨揍了
-          const hitByEgg = reactions.some((r) => r.targetSeat === seat && r.kind === "EGG");
+          // 挨砸才抖。送花抖一下就成挨揍了 —— 看 impact，不看具体是什么东西
+          const shaken = reactions.some(
+            (r) => r.targetSeat === seat && REACTION_META[r.kind].impact !== "gift",
+          );
           const revealed = game?.revealedVotes?.[seat];
           const isLady = game?.lady?.holderSeat === seat;
           const role = game?.reveal?.[seat];
@@ -244,21 +264,34 @@ export const SeatBoard = ({
               className={`flex min-h-0 w-[5rem] flex-col items-center justify-center gap-0.5
                 self-center rounded-xl p-1 transition
                 ${canSelect || canReact ? "active:scale-95" : "pointer-events-none"}
-                ${isSelected ? "bg-gold/15 ring-2 ring-gold" : ""}
-                ${isSelf && !isSelected ? "bg-ink/10 ring-1 ring-ink/40" : ""}`}
+                ${isSelected ? "bg-gold/15 ring-2 ring-gold" : ""}`}
             >
               <span className="relative">
                 <Avatar
                   avatar={player.avatar}
                   size={size}
                   dim={!player.connected}
-                  className={`${onTeam ? "ring-2 ring-gold" : isSelf ? "ring-2 ring-ink/70" : ""}
-                    ${hitByEgg ? "reaction-shake" : ""}`}
+                  className={`${onTeam ? "ring-2 ring-gold" : ""}
+                    ${shaken ? "reaction-shake" : ""}`}
                 />
 
 
-                {isLeader ? (
-                  <span className="absolute -top-2 -left-1.5 text-sm drop-shadow">👑</span>
+                {/*
+                  左上角这个位置只放一个身份标：
+                  **开局前是房主（🏠），开局后是队长（👑）。**
+                  对局里没人关心谁建的房，队长才是每轮都要看的；
+                  两个都挂上只会让人分不清哪个是哪个。
+                */}
+                {game === null ? (
+                  isHostSeat ? (
+                    <span className="absolute -top-2 -left-1.5 text-sm drop-shadow" title="房主">
+                      🏠
+                    </span>
+                  ) : null
+                ) : isLeader ? (
+                  <span className="absolute -top-2 -left-1.5 text-sm drop-shadow" title="队长">
+                    👑
+                  </span>
                 ) : null}
                 {isLady ? (
                   <span className="absolute -top-2 -right-1.5 text-sm drop-shadow">🔮</span>
@@ -300,6 +333,35 @@ export const SeatBoard = ({
                   </span>
                 ) : null}
 
+                {/* 表情包气泡：从他头顶冒出来，飘一会儿散掉 */}
+                {emotes
+                  .filter((e) => e.fromSeat === seat)
+                  .slice(-1)
+                  .map((e) => {
+                    const meta = EMOTES.find((x) => x.id === e.emoteId);
+                    if (!meta) return null;
+                    return (
+                      <span
+                        key={e.id}
+                        className="emote-pop pointer-events-none absolute -top-1 left-1/2 z-30
+                          flex w-max -translate-x-1/2 -translate-y-full flex-col items-center gap-0.5
+                          rounded-xl border border-line bg-surface px-1.5 py-1 shadow-lg"
+                      >
+                        <img
+                          src={`/art/roles/emotes/${meta.art}.webp`}
+                          alt=""
+                          className="h-10 w-10 rounded-md object-cover"
+                          onError={(ev) => {
+                            ev.currentTarget.style.display = "none";
+                          }}
+                        />
+                        <span className="max-w-[6rem] truncate text-[0.6rem] leading-none text-ink">
+                          {meta.text}
+                        </span>
+                      </span>
+                    );
+                  })}
+
                 {!player.connected ? (
                   <span className="absolute inset-0 flex items-center justify-center rounded-full bg-ground/60 text-[0.6rem]">
                     掉线
@@ -318,24 +380,22 @@ export const SeatBoard = ({
                     ${isLeader
                       ? "bg-gold text-ground"
                       : isSelf
-                        ? "bg-ink text-ground"
-                        : "bg-surface-2 text-ink ring-1 ring-line"}`}
+                        ? "bg-ink text-ground ring-1 ring-ink"
+                        : "bg-surface-2 text-ink-soft ring-1 ring-line"}`}
                 >
                   {seat + 1}
                 </span>
                 {/*
-                  座位不再按自己旋转，所以「哪个是我」全靠这块标注 ——
-                  自己那格把昵称换成实心的「你」，扫一眼就能定位。
+                  昵称照常显示 —— 自己那格也是。把昵称换成「你」等于把自己
+                  从桌上的名字体系里摘出去，别人喊你名字时反而对不上。
+                  「哪个是我」由号牌区分就够了（见上面 isSelf 的配色）。
                 */}
-                {isSelf ? (
-                  <span className="shrink-0 rounded bg-ink px-1 text-[0.62rem] font-bold leading-[1.15rem] text-ground">
-                    你
-                  </span>
-                ) : (
-                  <span className="min-w-0 truncate text-[0.62rem] leading-tight text-ink-mute">
-                    {player.nick}
-                  </span>
-                )}
+                <span
+                  className={`min-w-0 truncate text-[0.62rem] leading-tight
+                    ${isSelf ? "text-ink" : "text-ink-mute"}`}
+                >
+                  {player.nick}
+                </span>
               </span>
 
               {/* 终局才揭晓身份 */}
@@ -372,11 +432,27 @@ export const SeatBoard = ({
           >
             <span className="toss-y block">
               <span className="toss-spin block -translate-x-1/2 -translate-y-1/2 text-3xl drop-shadow-lg">
-                {REACTION_EMOJI[f.kind]}
+                {REACTION_META[f.kind].emoji}
               </span>
             </span>
           </span>
         ))}
+
+        {/* 点头像弹出来的小浮层，贴着那个座位 */}
+        {menuSeat !== null && renderMenu
+          ? (() => {
+              const el = seatEls.current.get(menuSeat);
+              const board = boardRef.current;
+              if (!el || !board) return null;
+              const a = el.getBoundingClientRect();
+              const b = board.getBoundingClientRect();
+              return renderMenu({
+                x: a.left - b.left + a.width / 2,
+                y: a.top - b.top + a.height / 2,
+                side: menuSeat < rows ? "left" : "right",
+              });
+            })()
+          : null}
 
         {/* 砸中的那一下，钉在目标座位上 */}
         {flights.map((f) => (
@@ -384,10 +460,10 @@ export const SeatBoard = ({
             key={`hit-${f.id}`}
             aria-hidden
             data-toss-hit={f.kind}
-            className={`${REACTION_HIT_ANIM[f.kind]} pointer-events-none absolute z-30 text-2xl`}
+            className={`${HIT_ANIM[REACTION_META[f.kind].impact]} pointer-events-none absolute z-30 text-2xl`}
             style={{ left: f.x + f.dx, top: f.y + f.dy }}
           >
-            {REACTION_HIT[f.kind]}
+            {REACTION_META[f.kind].hit}
           </span>
         ))}
       </div>

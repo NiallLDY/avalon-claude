@@ -102,6 +102,8 @@ interface AppState {
   lastEvent: GameEvent | null;
   /** 正在飞的花和蛋 */
   reactions: readonly FlyingReaction[];
+  /** 正在头顶上飘的表情包 */
+  emotes: readonly { readonly id: number; readonly fromSeat: number; readonly emoteId: string }[];
   /** 当前盖在屏幕上的结果卡，玩家点掉为止 */
   result: ResultCard | null;
   toasts: readonly Toast[];
@@ -120,7 +122,8 @@ interface AppState {
   refreshRooms: (query?: string) => Promise<void>;
   emit: (event: string, payload?: unknown) => void;
   act: (action: ClientAction) => void;
-  react: (targetSeat: number, kind: Reaction) => void;
+  react: (targetSeat: number, kind: Reaction, burst?: boolean) => void;
+  emote: (emoteId: string) => void;
   setSettings: (settings: GameSettings) => void;
   toast: (text: string, tone?: Toast["tone"]) => void;
   dismissToast: (id: number) => void;
@@ -156,6 +159,19 @@ const recordFinished = (payload: StatePayload): void => {
 let toastSeq = 0;
 let resultSeq = 0;
 let reactionSeq = 0;
+
+/** 表情包停留时长。和 SeatBoard 里的气泡动画时长是一对 */
+const EMOTE_MS = 2600;
+
+/** 生成一次飞行，到点自己收摊 */
+const spawnReaction = (
+  set: (fn: (s: AppState) => Partial<AppState>) => void,
+  r: Omit<FlyingReaction, "id">,
+): void => {
+  const id = ++reactionSeq;
+  set((s) => ({ reactions: [...s.reactions, { ...r, id }] }));
+  setTimeout(() => set((s) => ({ reactions: s.reactions.filter((x) => x.id !== id) })), REACTION_MS);
+};
 
 /** 错误码 → 给人看的话。服务端回的是机器码，别直接甩给用户 */
 const ERROR_TEXT: Record<string, string> = {
@@ -197,6 +213,7 @@ export const useStore = create<AppState>((set, get) => ({
   rulesOpen: false,
   lastEvent: null,
   reactions: [],
+  emotes: [],
   result: null,
   toasts: [],
 
@@ -261,14 +278,24 @@ export const useStore = create<AppState>((set, get) => ({
 
     socket.on("room:list", ({ rooms }: { rooms: RoomSummary[] }) => set({ rooms }));
 
-    socket.on("reaction", (r: Omit<FlyingReaction, "id">) => {
+    socket.on("reaction", (r: Omit<FlyingReaction, "id"> & { count?: number }) => {
+      // 连发是一条消息带个数，客户端展开成 N 个错开出发的飞行 ——
+      // 发 10 条消息会被限流掐掉，而且到达时间也不齐
+      const count = Math.max(1, Math.min(r.count ?? 1, 20));
+      for (let i = 0; i < count; i++) {
+        setTimeout(() => spawnReaction(set, r), i * 110);
+      }
+    });
+
+    socket.on("emote", ({ fromSeat, emoteId }: { fromSeat: number; emoteId: string }) => {
       const id = ++reactionSeq;
-      set((s) => ({ reactions: [...s.reactions, { ...r, id }] }));
+      set((s) => ({ emotes: [...s.emotes, { id, fromSeat, emoteId }] }));
       setTimeout(
-        () => set((s) => ({ reactions: s.reactions.filter((x) => x.id !== id) })),
-        REACTION_MS,
+        () => set((s) => ({ emotes: s.emotes.filter((x) => x.id !== id) })),
+        EMOTE_MS,
       );
     });
+
 
     socket.on("event", (event: GameEvent) => {
       set({ lastEvent: event });
@@ -384,7 +411,9 @@ export const useStore = create<AppState>((set, get) => ({
 
   emit: (event, payload) => get().socket?.emit(event, payload ?? {}),
   act: (action) => get().socket?.emit("game:action", { action }),
-  react: (targetSeat, kind) => get().socket?.emit("game:react", { targetSeat, kind }),
+  react: (targetSeat, kind, burst) =>
+    get().socket?.emit("game:react", { targetSeat, kind, ...(burst ? { burst: true } : {}) }),
+  emote: (emoteId) => get().socket?.emit("game:emote", { emoteId }),
   setSettings: (settings) => get().socket?.emit("room:settings", { settings }),
 
   toast: (text, tone = "info") => {

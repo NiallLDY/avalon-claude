@@ -17,6 +17,7 @@ import {
 } from "@avalon/shared";
 import { PlayerChips } from "../components/PlayerChip.js";
 import { ProfileButton } from "../components/Profile.js";
+import { EmoteMenu, ThrowMenu } from "../components/ReactMenu.js";
 import { SeatBoard } from "../components/SeatBoard.js";
 import { RoleCard } from "../components/RoleCard.js";
 import { Button, Latency, Sheet } from "../components/ui.js";
@@ -160,12 +161,13 @@ const PHASE_HINT: Record<string, string> = {
 };
 
 export const Game = () => {
-  const { state, act, react, leaveRoom } = useStore();
+  const { state, act, react, emote, leaveRoom } = useStore();
   const [picked, setPicked] = useState<number[]>([]);
   const [sheet, setSheet] = useState<"role" | "report" | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
   /** 正要朝谁扔东西。null = 没在扔 */
   const [reactTarget, setReactTarget] = useState<number | null>(null);
+  const [burst, setBurst] = useState(false);
 
   const game = state?.game ?? null;
   const phase = game?.phase;
@@ -218,13 +220,15 @@ export const Game = () => {
   const acting = phase === "ROLE_REVEAL" || phase === "VOTE" || phase === "MISSION";
 
   /*
-   * 能朝谁扔花扔蛋。只在组队阶段 —— 那是线下真正在发言互喷的时候，
-   * 别的阶段满屏鸡蛋只会盖住要看的东西。自己不扔自己，队长在选人也不扔
-   * （selectable 非空时 SeatBoard 让选人优先，这里就整个关掉）。
+   * 能点谁的头像。只在组队阶段 —— 那是线下真正在发言互喷的时候，
+   * 别的阶段满屏鸡蛋只会盖住要看的东西。队长在选人时整个关掉
+   * （selectable 非空时 SeatBoard 让选人优先，同一个手势不能有两个意思）。
+   *
+   * **自己也在内**：点别人是扔东西，点自己是发表情包。
    */
   const reactable: number[] =
     phase === "TEAM_BUILD" && me && selectable.length === 0
-      ? room.seats.flatMap((p, i) => (p && i !== me.seat ? [i] : []))
+      ? room.seats.flatMap((p, i) => (p ? [i] : []))
       : [];
 
   /** 中心提示：结果类阶段的一行大字 */
@@ -265,6 +269,31 @@ export const Game = () => {
         selfSeat={me?.seat ?? null}
         reactable={reactable}
         onReact={setReactTarget}
+        menuSeat={reactTarget}
+        renderMenu={(anchor) =>
+          reactTarget === null ? null : reactTarget === me?.seat ? (
+            <EmoteMenu
+              anchor={anchor}
+              onClose={() => setReactTarget(null)}
+              onPick={(id) => {
+                emote(id);
+                setReactTarget(null);
+              }}
+            />
+          ) : (
+            <ThrowMenu
+              anchor={anchor}
+              burst={burst}
+              onBurstChange={setBurst}
+              onClose={() => setReactTarget(null)}
+              onPick={(kind) => {
+                react(reactTarget, kind, burst);
+                // 连发时不关，方便接着换东西扔；单发扔完就收
+                if (!burst) setReactTarget(null);
+              }}
+            />
+          )
+        }
       >
         {acting ? (
           <ActingStatus game={game} />
@@ -363,39 +392,6 @@ export const Game = () => {
       </Sheet>
       <Sheet open={sheet === "report"} onOpenChange={(o) => setSheet(o ? "report" : null)} title="战报">
         <Report game={game} seated={room.seats} />
-      </Sheet>
-
-      {/*
-        献花 / 砸蛋。发言阶段点别人头像弹出来 ——
-        扔完立刻关掉，两下点完，别打断发言。
-      */}
-      <Sheet
-        open={reactTarget !== null}
-        onOpenChange={(o) => !o && setReactTarget(null)}
-        title={reactTarget === null ? "" : `丢给 ${labeler(room.seats).full(reactTarget)}`}
-      >
-        <div className="flex gap-3 pb-2">
-          {(
-            [
-              ["FLOWER", "🌹", "献花"],
-              ["EGG", "🥚", "砸蛋"],
-            ] as const
-          ).map(([kind, emoji, label]) => (
-            <button
-              key={kind}
-              type="button"
-              onClick={() => {
-                if (reactTarget !== null) react(reactTarget, kind);
-                setReactTarget(null);
-              }}
-              className="flex flex-1 flex-col items-center gap-1 rounded-2xl bg-surface-2 py-5
-                text-ink active:scale-95"
-            >
-              <span className="text-4xl">{emoji}</span>
-              <span className="text-sm">{label}</span>
-            </button>
-          ))}
-        </div>
       </Sheet>
 
       {/* 对局中退出座位是保留的 —— 得说清楚怎么回来，不然人会以为把牌局搞砸了 */}

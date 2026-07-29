@@ -225,3 +225,63 @@
   opacity: 0.035;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
 }
+
+/**
+ * 泼水落地：不炸也不飘，往下淌一段再收。
+ * 用砸的动画就成了「水球爆炸」，用花的就成了「水往上飞」，都不对。
+ */
+@keyframes toss-splash {
+  0% {
+    transform: translate(-50%, -70%) scale(0.4);
+    opacity: 0;
+  }
+  25% {
+    transform: translate(-50%, -50%) scale(1.4);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, 10%) scale(1.1);
+    opacity: 0;
+  }
+}
+@utility toss-splash {
+  animation: toss-splash 0.5s ease-in 0.52s both;
+}
+
+/** 小浮层弹出 */
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+}
+
+/** 表情包气泡：冒出来 → 停一会儿 → 散掉。总时长和 store 的 EMOTE_MS 是一对 */
+@keyframes emote-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -80%) scale(0.6);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(-50%, -100%) scale(1.06);
+  }
+  20% {
+    transform: translate(-50%, -100%) scale(1);
+  }
+  85% {
+    opacity: 1;
+    transform: translate(-50%, -100%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -130%) scale(0.95);
+  }
+}
+@utility emote-pop {
+  animation: emote-pop 2.6s ease-out both;
+}

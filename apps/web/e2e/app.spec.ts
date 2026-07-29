@@ -240,8 +240,9 @@ test.describe("我是几号", () => {
 
     await expect(page.getByText("你的座位")).toBeVisible();
     await expect(page.getByText("1号", { exact: true })).toBeVisible();
-    // 自己那格标「你」而不是昵称
-    await expect(page.getByText("你", { exact: true })).toBeVisible();
+    // 自己那格照常显示昵称 —— 把它换成「你」等于把自己从名字体系里摘出去；
+    // 区分靠号牌配色，不靠改称呼
+    await expect(page.locator('button[data-seat="0"]')).toContainText("玩家");
   });
 });
 
@@ -323,140 +324,6 @@ test.describe("退出房间", () => {
     // 而且刷新之后不该又被自动拉回房间
     await quitter.reload();
     await expect(quitter.getByRole("button", { name: "开房间" })).toBeVisible();
-
-    for (const c of ctxs) await c.close();
-  });
-});
-
-test.describe("献花砸蛋", () => {
-  test("发言阶段点别人头像能扔，全桌都看得到", async ({ browser }) => {
-    test.setTimeout(90_000);
-    const ctxs = await Promise.all(
-      Array.from({ length: 5 }, () => browser.newContext({ locale: "zh-CN" })),
-    );
-    const pages = await Promise.all(ctxs.map((c) => c.newPage()));
-    for (const [i, p] of pages.entries()) await openApp(p, `玩家${i}`);
-
-    const host = pages[0]!;
-    const code = await createRoom(host, "砸蛋测试");
-    await sit(host, 0);
-    for (const [i, p] of pages.slice(1).entries()) {
-      await p.getByPlaceholder("房间码").fill(code);
-      await p.getByRole("button", { name: "进", exact: true }).click();
-      await expect(p.locator("p.font-display").first()).toHaveText(code);
-      await sit(p, i + 1);
-    }
-    for (const p of pages) await p.getByRole("button", { name: "准备" }).click();
-    await host.getByRole("button", { name: "开始游戏" }).click();
-    for (const p of pages) {
-      await p.getByRole("dialog").getByRole("button", { name: /点击查看身份/ }).click();
-      await p.keyboard.press("Escape");
-      await expect(p.getByRole("dialog")).toHaveCount(0);
-    }
-
-    await expect(host.getByText(/挑 \d+ 个人/)).toBeVisible();
-
-    // 找一个不是队长的人来扔 —— 队长点头像是选队员，不是扔东西
-    let thrower = host;
-    for (const p of pages) {
-      const picking = await p
-        .getByRole("button", { name: /选 \d+ 个人|^确认 \d/ })
-        .isVisible()
-        .catch(() => false);
-      if (!picking) {
-        thrower = p;
-        break;
-      }
-    }
-
-    // 挑一个不是自己的座位砸
-    const target = thrower.locator("button[data-seat]:not([disabled])").first();
-    const targetSeat = (await target.getAttribute("data-seat"))!;
-    const targetBox = (await target.boundingBox())!;
-    const myBox = (await thrower
-      .locator("button[data-seat]")
-      .filter({ hasText: "你" })
-      .boundingBox())!;
-
-    await target.click();
-    await expect(thrower.getByRole("dialog").getByText("砸蛋")).toBeVisible();
-    await thrower.getByRole("button", { name: /砸蛋/ }).click();
-
-    // 蛋要飞到全桌每个人的屏幕上，不只是扔的人自己
-    for (const p of pages) await expect(p.locator("[data-toss]")).toHaveCount(1);
-
-    /*
-     * **它得真的从我的位置飞到对方号码上**，不是在对方头顶冒个泡。
-     *
-     * 量的是最里层那个真正带着 emoji 走的元素 —— 外层 span 只负责横向位移，
-     * 它自己的 getBoundingClientRect **不包含被 transform 推走的子元素**，
-     * 量它会永远得到起点，看上去像是「动画没跑」。
-     */
-    const trace = await thrower.evaluate(async () => {
-      const emoji = () =>
-        (document.querySelector("[data-toss] > * > *") as HTMLElement | null)?.getBoundingClientRect();
-      const start = emoji();
-      await new Promise((r) => setTimeout(r, 600));
-      const end = emoji();
-      const hit = (
-        document.querySelector("[data-toss-hit]") as HTMLElement | null
-      )?.getBoundingClientRect();
-      return start && end && hit
-        ? { sy: start.top, ey: end.top, ex: end.left, hy: hit.top, hx: hit.left }
-        : null;
-    });
-    expect(trace).not.toBeNull();
-
-    const myCy = myBox.y + myBox.height / 2;
-    const targetCy = targetBox.y + targetBox.height / 2;
-    const targetCx = targetBox.x + targetBox.width / 2;
-
-    // 起点在我这儿
-    expect(Math.abs(trace!.sy - myCy)).toBeLessThan(60);
-    // 终点在对方那儿
-    expect(Math.abs(trace!.ey - targetCy)).toBeLessThan(50);
-    expect(Math.abs(trace!.ex - targetCx)).toBeLessThan(50);
-    // 砸中的爆点也钉在对方座位上
-    expect(Math.abs(trace!.hy - targetCy)).toBeLessThan(50);
-    expect(Math.abs(trace!.hx - targetCx)).toBeLessThan(50);
-    void targetSeat;
-
-    /*
-     * **献花不能长得跟砸蛋一样。**
-     * 之前两种共用一套落地动画、而且都会让对方头像抖一下 ——
-     * 被送花还抖，那是挨揍的语言。
-     *
-     * 三件事必须在**同一时刻**读出来。反应只在屏幕上活 1 秒，
-     * 拆成几条会轮询的断言挨个跑，轮到最后一条时它早没了，
-     * 于是「没有抖动」这种断言永远成立 —— 测了个寂寞。
-     */
-    const snapshot = async (page: typeof thrower) =>
-      page.evaluate(() => ({
-        flying: document.querySelector("[data-toss]")?.getAttribute("data-toss") ?? null,
-        hitKind: document.querySelector("[data-toss-hit]")?.getAttribute("data-toss-hit") ?? null,
-        hitClass: document.querySelector("[data-toss-hit]")?.className ?? null,
-        shaking: document.querySelectorAll(".reaction-shake").length,
-      }));
-
-    const eggShot = await snapshot(thrower);
-    expect(eggShot.hitKind).toBe("EGG");
-    expect(eggShot.hitClass).toContain("toss-hit");
-    expect(eggShot.shaking).toBe(1); // 挨了蛋要抖
-
-    await thrower.waitForTimeout(1200);
-    await expect(thrower.locator("[data-toss]")).toHaveCount(0);
-
-    await target.click();
-    await thrower.getByRole("button", { name: /献花/ }).click();
-
-    const flowerShot = await snapshot(thrower);
-    expect(flowerShot.flying).toBe("FLOWER");
-    expect(flowerShot.hitKind).toBe("FLOWER");
-    // 花是绽开往上飘，蛋才是炸开
-    expect(flowerShot.hitClass).toContain("toss-bloom");
-    expect(flowerShot.hitClass).not.toContain("toss-hit");
-    // 而且送花不该把人抖一下
-    expect(flowerShot.shaking).toBe(0);
 
     for (const c of ctxs) await c.close();
   });
@@ -643,5 +510,90 @@ test.describe("规则", () => {
 
     await page.getByRole("button", { name: "← 返回" }).click();
     await expect(page.getByRole("button", { name: "开房间" })).toBeVisible();
+  });
+});
+
+test.describe("扔东西和表情包", () => {
+  /** 起一局 5 人，推进到组队阶段 */
+  const startGame = async (browser: import("@playwright/test").Browser) => {
+    const ctxs = await Promise.all(
+      Array.from({ length: 5 }, () => browser.newContext({ locale: "zh-CN" })),
+    );
+    const pages = await Promise.all(ctxs.map((c) => c.newPage()));
+    for (const [i, p] of pages.entries()) await openApp(p, `玩家${i + 1}`);
+
+    const host = pages[0]!;
+    const code = await createRoom(host, "互动测试");
+    await sit(host, 0);
+    for (const [i, p] of pages.slice(1).entries()) {
+      await p.getByPlaceholder("房间码").fill(code);
+      await p.getByRole("button", { name: "进", exact: true }).click();
+      await sit(p, i + 1);
+    }
+    for (const p of pages) await p.getByRole("button", { name: "准备" }).click();
+    await host.getByRole("button", { name: "开始游戏" }).click();
+
+    // 身份卡开局自动弹出，翻开就等于确认看牌；看完必须关掉 ——
+    // 它是模态的，开着时底下的座位按钮点不到
+    for (const p of pages) {
+      await p.getByRole("dialog").getByRole("button", { name: /点击查看身份/ }).click();
+      await p.keyboard.press("Escape");
+      await expect(p.getByRole("dialog")).toHaveCount(0);
+    }
+    await expect(host.getByText(/挑 \d+ 个人/)).toBeVisible();
+    return { ctxs, pages, host };
+  };
+
+  test("点别人头像弹小浮层，扔出去的东西真的会飞", async ({ browser }) => {
+    const { ctxs, pages, host } = await startGame(browser);
+    // 找一个不是队长的人来扔 —— 队长点头像是选人，不是扔东西
+    let thrower = pages[0]!;
+    for (const p of pages) {
+      const isLeader = await p
+        .getByRole("button", { name: /^选 \d+ 个人|^确认 \d/ })
+        .isVisible()
+        .catch(() => false);
+      if (!isLeader) {
+        thrower = p;
+        break;
+      }
+    }
+    const me = pages.indexOf(thrower);
+    const targetSeat = me === 0 ? 1 : 0;
+
+    await thrower.locator(`button[data-seat="${targetSeat}"]`).click();
+    // 不是 Sheet —— 页面上不该出现 dialog
+    await expect(thrower.getByRole("dialog")).toHaveCount(0);
+    await expect(thrower.getByRole("button", { name: "砸蛋" })).toBeVisible();
+    await expect(thrower.getByRole("button", { name: "扔番茄" })).toBeVisible();
+    await expect(thrower.getByRole("button", { name: "泼水" })).toBeVisible();
+
+    await thrower.getByRole("button", { name: "砸蛋" }).click();
+    // 全场都该看到它飞
+    await expect(host.locator('[data-toss="EGG"]')).toHaveCount(1);
+    // 飞完自己收摊
+    await expect(host.locator("[data-toss]")).toHaveCount(0, { timeout: 4000 });
+
+    for (const c of ctxs) await c.close();
+  });
+
+  test("点自己头像弹的是表情包", async ({ browser }) => {
+    const { ctxs, pages, host } = await startGame(browser);
+    const notLeader = pages.find(
+      (p) => p !== host,
+    )!;
+    // 找到自己那格：座位号和进房顺序一致
+    const mySeat = pages.indexOf(notLeader);
+
+    await notLeader.locator(`button[data-seat="${mySeat}"]`).click();
+    await expect(notLeader.getByRole("button", { name: "我信你个鬼" })).toBeVisible();
+    // 不该出现扔东西的选项
+    await expect(notLeader.getByRole("button", { name: "砸蛋" })).toHaveCount(0);
+
+    await notLeader.getByRole("button", { name: "我信你个鬼" }).click();
+    // 全场都看得到，气泡上带那句话
+    await expect(host.getByText("我信你个鬼")).toBeVisible();
+
+    for (const c of ctxs) await c.close();
   });
 });

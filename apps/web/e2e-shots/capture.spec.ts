@@ -135,9 +135,16 @@ test("拍完整一局", async ({ browser }) => {
     if (!thrown) {
       thrown = true;
       const bystander = pages.find((p) => p !== leader)!;
-      await bystander.locator("button[data-seat]:not([disabled])").first().click();
-      await shot(bystander, "献花砸蛋-选");
-      await bystander.getByRole("button", { name: /砸蛋/ }).click();
+      // 点自己弹的是表情包，点别人才是扔东西。挨个试到出现「砸蛋」为止
+      for (const seat of [0, 1, 2, 3, 4]) {
+        await bystander.locator(`button[data-seat="${seat}"]`).click();
+        if (await bystander.getByRole("button", { name: "砸蛋" }).isVisible().catch(() => false)) {
+          break;
+        }
+        await bystander.keyboard.press("Escape");
+      }
+      await shot(bystander, "扔东西-菜单");
+      await bystander.getByRole("button", { name: "砸蛋" }).click();
       // 飞行 0.7s。shot 自己会先等 250ms，所以第二张只需再补 300ms 就落在砸中那一瞬
       await shot(host, "献花砸蛋-飞在半路");
       await host.waitForTimeout(300);

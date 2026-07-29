@@ -12,6 +12,7 @@
 import type { Server as IOServer, Socket } from "socket.io";
 import type { ClientEventName, GameEvent, Profile } from "@avalon/shared";
 import { CLIENT_EVENTS, profileSchema } from "@avalon/shared/schemas";
+import { BURST_COUNT } from "@avalon/shared";
 import { config } from "./config.js";
 import { logger } from "./logger.js";
 import { createCounter, createRateLimiter } from "./ratelimit.js";
@@ -29,6 +30,7 @@ import {
   leaveRoom,
   markDisconnected,
   canDissolve,
+  seatOf,
   setReady,
   setSeatCount,
   requestSwap,
@@ -441,12 +443,32 @@ export const attachSocket = (io: IOServer, registry: Registry, store: Store): vo
       const allowed = canReact(room, socket.data.playerId, parsed.data.targetSeat);
       if (!allowed.ok) return;
 
-      // 里面全是公开信息（座位号 + 花还是蛋），不含身份，所以可以群发
+      // 里面全是公开信息（座位号 + 扔的什么），不含身份，所以可以群发。
+      // 连发在服务端翻成 count，客户端只发一条 —— 连点 10 次的话限流第一下就把人掐了
       io.to(`room:${room.id}`).emit("reaction", {
         fromSeat: allowed.value,
         targetSeat: parsed.data.targetSeat,
         kind: parsed.data.kind,
+        count: parsed.data.burst ? BURST_COUNT : 1,
       });
+    });
+
+    /*
+     * 表情包。点自己头像发，不针对任何人，跟扔东西共用一套限流。
+     * 同样静默丢弃 —— 这是娱乐功能，出错弹提示只会更吵。
+     */
+    listen("game:emote", (raw: unknown) => {
+      if (!reactLimiter.hit(socket.id, now())) return;
+      const parsed = CLIENT_EVENTS["game:emote"].safeParse(raw ?? {});
+      if (!parsed.success) return;
+      const room = socket.data.roomId ? registry.get(socket.data.roomId) : null;
+      if (!room) return;
+
+      const seat = seatOf(room, socket.data.playerId);
+      // 没入座的人（观战/等待区）不发表情，否则没地方显示
+      if (seat < 0) return;
+
+      io.to(`room:${room.id}`).emit("emote", { fromSeat: seat, emoteId: parsed.data.emoteId });
     });
 
     socket.on("disconnect", () => {

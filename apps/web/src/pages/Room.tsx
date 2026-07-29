@@ -147,6 +147,7 @@ export const Room = () => {
         seats={room.seats}
         game={null}
         selfSeat={mySeat}
+        hostId={room.hostId}
         emptySelectable={!swapMode}
         selectable={room.seats.flatMap((p, i) => (p && p.id !== selfId && (swapMode || host) ? [i] : []))}
         onSelect={onSeatTap}

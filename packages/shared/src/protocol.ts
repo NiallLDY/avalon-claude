@@ -98,13 +98,58 @@ export const CLIENT_EVENT_NAMES = [
   "game:action",
   /** 献花 / 砸鸡蛋。纯玩梗，不影响任何规则 */
   "game:react",
+  "game:emote",
   /** 测延迟用的心跳。服务端原样回 net:pong，往返差就是 RTT */
   "net:ping",
 ] as const;
 
 /** 能扔给别人的东西。**只是气氛，不进战报、不影响任何判定** */
-export const REACTIONS = ["FLOWER", "EGG"] as const;
+/**
+ * 朝别人扔的东西。**元数据放这里，前后端共用** ——
+ * 加一种新的只改这一处，服务端校验和前端渲染同时跟上。
+ */
+export const REACTIONS = ["FLOWER", "EGG", "TOMATO", "WATER"] as const;
 export type Reaction = (typeof REACTIONS)[number];
+
+export interface ReactionMeta {
+  readonly emoji: string;
+  readonly label: string;
+  /** 砸中那一刻炸开的东西 */
+  readonly hit: string;
+  /**
+   * 落地表现。**送花和挨砸不能共用** ——
+   * 送花却让对方头像抖一下，那是挨揍的语言。
+   */
+  readonly impact: "gift" | "hit" | "splash";
+}
+
+export const REACTION_META: { readonly [K in Reaction]: ReactionMeta } = {
+  FLOWER: { emoji: "🌹", label: "献花", hit: "🌸", impact: "gift" },
+  EGG: { emoji: "🥚", label: "砸蛋", hit: "💥", impact: "hit" },
+  TOMATO: { emoji: "🍅", label: "扔番茄", hit: "🍅", impact: "hit" },
+  WATER: { emoji: "🪣", label: "泼水", hit: "💦", impact: "splash" },
+};
+
+/** 连发一次扔几个 */
+export const BURST_COUNT = 10;
+
+/**
+ * 表情包。点**自己**头像发，不针对任何人，全场都看得到。
+ * 图在 assets/roles/emotes/（跟角色卡走同一条生成流水线）。
+ */
+export const EMOTES = [
+  { id: "naked-rush", art: "naked-rush", text: "你们三狼裸冲啊" },
+  { id: "trust-me", art: "trust-me", text: "我信你个鬼" },
+  { id: "speak-up", art: "speak-up", text: "你倒是说话啊" },
+  { id: "again-you", art: "again-you", text: "又是你？" },
+  { id: "stop-acting", art: "stop-acting", text: "别演了，出来吧" },
+  { id: "this-is-fine", art: "this-is-fine", text: "这波稳了" },
+  { id: "why-me", art: "why-me", text: "刺客你看我干嘛" },
+  { id: "im-out", art: "im-out", text: "下把别叫我了" },
+] as const;
+
+export type EmoteId = (typeof EMOTES)[number]["id"];
+export const isEmoteId = (v: string): v is EmoteId => EMOTES.some((e) => e.id === v);
 
 export type ClientEventName = (typeof CLIENT_EVENT_NAMES)[number];
 
@@ -202,9 +247,12 @@ export interface ServerEvents {
    * 谁朝谁扔了什么。**全房间群发** —— 里面全是公开信息（座位号 + 花还是蛋），
    * 不含任何身份，所以不需要逐人裁剪。
    */
+  emote: (payload: { fromSeat: number; emoteId: string }) => void;
   reaction: (payload: {
     fromSeat: number;
     targetSeat: number;
     kind: Reaction;
+    /** 连发时一次扔几个 */
+    count: number;
   }) => void;
 }

@@ -21,6 +21,7 @@ import {
   type ClientEventName,
   type Profile,
   type RoomOptions,
+  EMOTES,
 } from "./protocol.js";
 
 export const nickSchema = z
@@ -120,7 +121,16 @@ export const CLIENT_EVENTS = {
   "game:restart": z.object({}),
   "game:action": z.object({ action: clientActionSchema }),
   /** 献花 / 砸蛋。座位号由服务端按连接身份填，客户端只说扔给谁 */
-  "game:react": z.object({ targetSeat: seatSchema, kind: z.enum(REACTIONS) }),
+  "game:react": z.object({
+    targetSeat: seatSchema,
+    kind: z.enum(REACTIONS),
+    /** 连发。服务端把它翻成 BURST_COUNT 个，客户端只发一条 */
+    burst: z.boolean().optional(),
+  }),
+  /** 点自己头像发的表情包，不针对任何人 */
+  "game:emote": z.object({
+    emoteId: z.enum(EMOTES.map((e) => e.id) as [string, ...string[]]),
+  }),
   /**
    * 延迟心跳。`t` 是客户端自己的时间戳，服务端只负责原样回声 ——
    * 两端时钟不用对齐，因为差值只在客户端这一侧算。
