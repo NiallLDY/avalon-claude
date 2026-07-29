@@ -58,6 +58,14 @@ export const Lobby = () => {
           >
             我的战绩
           </button>
+          <span className="text-line">·</span>
+          <button
+            type="button"
+            onClick={() => useStore.getState().setBoardOpen(true)}
+            className="underline decoration-dotted underline-offset-4 active:text-gold"
+          >
+            排行榜
+          </button>
         </div>
       </header>
 

@@ -597,3 +597,24 @@ test.describe("扔东西和表情包", () => {
     for (const c of ctxs) await c.close();
   });
 });
+
+test.describe("排行榜", () => {
+  test("排行榜页能打开，口径都写清楚了", async ({ page }) => {
+    await openApp(page);
+    await page.getByRole("button", { name: "排行榜" }).click();
+
+    // 没人打满局数时要说清楚为什么是空的，不能只给个空列表
+    await expect(page.getByText(/还没有人打满 \d+ 局/)).toBeVisible();
+    // 每个指标都得有口径说明
+    await expect(page.getByText(/你当队长、车通过了，车上有红方的比例/)).toBeVisible();
+    await expect(page.getByText(/你投反对的车里，确实有红方的比例/)).toBeVisible();
+    // 没有账号系统这件事要挑明
+    await expect(page.getByText(/清了浏览器数据或换设备/)).toBeVisible();
+
+    await page.getByRole("button", { name: "对局记录" }).click();
+    await expect(page.getByText("还没有打完的对局")).toBeVisible();
+
+    await page.getByRole("button", { name: "← 返回" }).click();
+    await expect(page.getByRole("button", { name: "开房间" })).toBeVisible();
+  });
+});

@@ -173,10 +173,13 @@ export const createStore = () => {
     }
   };
 
-  /** 终局战报，供复盘页看。TTL 到期自动清 */
+  /**
+   * 终局战报，供复盘页看。**永久保留** ——
+   * 战绩是长期数据，不该像房间快照那样过期就没。
+   */
   const saveReport = async (roomId: string, report: unknown): Promise<void> => {
     try {
-      await redis.set(reportKey(roomId), JSON.stringify(report), "EX", config.reportTtlSeconds);
+      await redis.set(reportKey(roomId), JSON.stringify(report));
     } catch (e) {
       logger.warn({ err: String(e), roomId }, "写战报失败");
     }

@@ -5,8 +5,9 @@
  * 服务端不知道「你」是谁跨局的同一个人，只有这台手机知道自己的 playerId。
  * 要做跨设备的长期战绩榜就得先有账号和数据库，那是另一个产品。
  *
- * 服务端只留每局的完整战报（Redis，7 天 TTL）。所以本地记的是「摘要 + 房间码」，
- * 想看某局的逐轮明细，拿房间码去 `/api/reports/:id` 换 —— 7 天内有效，过期就只剩摘要。
+ * 服务端永久保留每局的完整战报。本地这份是「摘要 + 房间码」，
+ * 想看逐轮明细就拿房间码去 `/api/reports/:id` 换。
+ * 全站公开的排行榜和对局记录另有接口（/api/leaderboard、/api/matches）。
  */
 
 import type { RoleId, Side, WinReason } from "@avalon/shared";

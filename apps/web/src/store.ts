@@ -99,6 +99,8 @@ interface AppState {
   needsOnboarding: boolean;
   /** 规则页开着没。任何页面都能开，所以放全局 */
   rulesOpen: boolean;
+  /** 排行榜页开着没 */
+  boardOpen: boolean;
   lastEvent: GameEvent | null;
   /** 正在飞的花和蛋 */
   reactions: readonly FlyingReaction[];
@@ -112,6 +114,7 @@ interface AppState {
   setProfile: (profile: Profile) => void;
   completeOnboarding: () => void;
   setRulesOpen: (open: boolean) => void;
+  setBoardOpen: (open: boolean) => void;
   createRoom: (opts: {
     name: string;
     visibility: "PUBLIC" | "PRIVATE";
@@ -211,6 +214,7 @@ export const useStore = create<AppState>((set, get) => ({
   restoring: loadLastRoom() !== null,
   needsOnboarding: !hasProfile(),
   rulesOpen: false,
+  boardOpen: false,
   lastEvent: null,
   reactions: [],
   emotes: [],
@@ -369,6 +373,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   completeOnboarding: () => set({ needsOnboarding: false }),
   setRulesOpen: (rulesOpen) => set({ rulesOpen }),
+  setBoardOpen: (boardOpen) => set({ boardOpen }),
 
   createRoom: async (opts) => {
     const res = await fetch("/api/rooms", {

@@ -30,6 +30,17 @@ const fakeStore = (): Store =>
     redis: null,
   }) as unknown as Store;
 
+/** 战绩归档桩。归档失败不该影响对局，测试里也不需要真的写 */
+const fakeRecords = () =>
+  ({
+    archive: async () => null,
+    leaderboard: async () => [],
+    recentMatches: async () => [],
+    match: async () => null,
+    player: async () => null,
+    readPlayer: async () => null,
+  }) as unknown as import("./records.js").Records;
+
 interface Client {
   socket: ClientSocket;
   id: string;
@@ -114,7 +125,7 @@ beforeEach(async () => {
   http = createServer();
   io = new IOServer(http, { path: "/ws", maxHttpBufferSize: 4096 });
   registry = createRegistry();
-  attachSocket(io, registry, fakeStore());
+  attachSocket(io, registry, fakeStore(), fakeRecords());
   port = await listen(http);
 });
 
@@ -402,10 +413,27 @@ describe("献花砸蛋", () => {
     await new Promise((r) => setTimeout(r, 150));
 
     for (const got of seen) {
-      expect(got).toEqual([{ fromSeat: 3, targetSeat: 1, kind: "EGG" }]);
+      // count 是连发展开用的，单发是 1
+      expect(got).toEqual([{ fromSeat: 3, targetSeat: 1, kind: "EGG", count: 1 }]);
     }
     // 纯气氛，不该动到对局状态
     for (const c of members) expect(c.state!.game!.phase).toBe("TEAM_BUILD");
+  }, 15_000);
+
+  it("十连发只发一条消息，个数交给客户端展开", async () => {
+    const { members } = await setupRoom(5);
+    members[0]!.socket.emit("game:start", {});
+    await waitFor(members, (c) => c.state?.game !== null, "开局");
+    for (const c of members) act(c, { type: "ACK_ROLE" });
+    await waitFor(members, (c) => c.state?.game?.phase === "TEAM_BUILD", "进组队阶段");
+
+    const seen: unknown[] = [];
+    members[0]!.socket.on("reaction", (r: unknown) => seen.push(r));
+    members[3]!.socket.emit("game:react", { targetSeat: 1, kind: "TOMATO", burst: true });
+    await new Promise((r) => setTimeout(r, 150));
+
+    // 一条消息带个数 —— 发十条会被限流掐掉，到达时间也不齐
+    expect(seen).toEqual([{ fromSeat: 3, targetSeat: 1, kind: "TOMATO", count: 10 }]);
   }, 15_000);
 
   it("阶段不对就静默丢弃，不弹错误", async () => {

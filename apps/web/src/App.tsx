@@ -6,6 +6,7 @@ import { Room } from "./pages/Room.js";
 import { Game } from "./pages/Game.js";
 import { GameOver } from "./pages/GameOver.js";
 import { Onboarding } from "./pages/Onboarding.js";
+import { Leaderboard } from "./pages/Leaderboard.js";
 import { Rules } from "./pages/Rules.js";
 import { useStore } from "./store.js";
 
@@ -15,6 +16,8 @@ export const App = () => {
   const finishedGame = useStore((s) => s.finishedGame);
   const needsOnboarding = useStore((s) => s.needsOnboarding);
   const rulesOpen = useStore((s) => s.rulesOpen);
+  const boardOpen = useStore((s) => s.boardOpen);
+  const setBoardOpen = useStore((s) => s.setBoardOpen);
   const setRulesOpen = useStore((s) => s.setRulesOpen);
 
   useEffect(() => connect(), [connect]);
@@ -48,6 +51,7 @@ export const App = () => {
       <ResultOverlay />
       <Toasts />
       {rulesOpen ? <Rules onClose={() => setRulesOpen(false)} /> : null}
+      {boardOpen ? <Leaderboard onClose={() => setBoardOpen(false)} /> : null}
     </>
   );
 };

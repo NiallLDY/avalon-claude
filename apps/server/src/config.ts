@@ -65,8 +65,6 @@ export const config = {
   sweepIntervalMs: num("SWEEP_INTERVAL_MS", MINUTE),
   /** 房间快照写 Redis 的防抖间隔 */
   snapshotDebounceMs: num("SNAPSHOT_DEBOUNCE_MS", 2_000),
-  /** 终局战报在 Redis 里的保留时长 */
-  reportTtlSeconds: num("REPORT_TTL_SECONDS", 7 * 24 * 60 * 60),
 
   /** 留的开关：设了才启用 Cloudflare Turnstile 建房校验 */
   turnstileSecret: str("TURNSTILE_SECRET", ""),

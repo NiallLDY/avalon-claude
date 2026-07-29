@@ -5,8 +5,8 @@
  *
  * 和规则页一样是全屏浮层，**只有它自己允许滚动**（铁律 4 的例外）。
  *
- * 点某一局能拉出那局的完整战报：服务端存着，但只留 7 天，
- * 过期就只剩本地这条摘要。
+ * 点某一局能拉出那局的完整战报：服务端永久存着。
+ * 公开的排行榜和全站对局记录在「排行榜」页。
  */
 
 import { useEffect, useState } from "react";
@@ -45,7 +45,7 @@ const Stat = ({ label, total, won }: { label: string; total: number; won: number
   );
 };
 
-/** 某一局的完整战报。服务端只留 7 天，过期就没了 */
+/** 某一局的完整战报。服务端永久保留 */
 const OneReport = ({ record, onBack }: { record: GameRecord; onBack: () => void }) => {
   const [state, setState] = useState<
     | { kind: "loading" }
@@ -97,7 +97,7 @@ const OneReport = ({ record, onBack }: { record: GameRecord; onBack: () => void 
         <div className="rounded-xl bg-surface-2 p-4 text-center">
           <p className="text-sm text-ink-soft">这局的详细战报已经过期了</p>
           <p className="mt-1 text-xs text-ink-mute">
-            服务端只保留 7 天。上面这条摘要存在你手机里，不会过期。
+            服务端永久保留。上面这条摘要存在你手机里，不会过期。
           </p>
         </div>
       ) : (

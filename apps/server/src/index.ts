@@ -13,11 +13,13 @@ import { config } from "./config.js";
 import { logger } from "./logger.js";
 import { createRegistry } from "./registry.js";
 import { createStore } from "./store.js";
+import { createRecords, RANKED_MIN_GAMES } from "./records.js";
 import { attachSocket } from "./socket.js";
 import { roomSummary } from "./rooms.js";
 
 const registry = createRegistry();
 const store = createStore();
+const records = createRecords(store.redis);
 
 const app = Fastify({ loggerInstance: logger, trustProxy: config.trustProxy });
 
@@ -56,7 +58,31 @@ app.post("/api/rooms", async (req, reply) => {
   return { room: roomSummary(created.room) };
 });
 
-/** 终局战报，供复盘页看。Redis TTL 7 天 */
+/**
+ * ── 公开战绩接口 ──
+ * 全部公开：没有账号系统，也就没有「谁能看谁」这回事。
+ * 里面只有终局之后的信息，不含任何进行中对局的机密。
+ */
+app.get("/api/leaderboard", async () => ({
+  minGames: RANKED_MIN_GAMES,
+  players: await records.leaderboard(50),
+}));
+
+app.get("/api/matches", async () => ({ matches: await records.recentMatches(30) }));
+
+app.get<{ Params: { id: string } }>("/api/matches/:id", async (req, reply) => {
+  const found = await records.match(req.params.id);
+  if (!found) return reply.code(404).send({ error: "NOT_FOUND" });
+  return found;
+});
+
+app.get<{ Params: { id: string } }>("/api/players/:id", async (req, reply) => {
+  const found = await records.player(req.params.id);
+  if (!found) return reply.code(404).send({ error: "NOT_FOUND" });
+  return found;
+});
+
+/** 终局战报，供复盘页看。永久保留 */
 app.get<{ Params: { id: string } }>("/api/reports/:id", async (req, reply) => {
   const report = await store.loadReport(req.params.id.toUpperCase());
   if (!report) return reply.code(404).send({ error: "NOT_FOUND" });
@@ -89,7 +115,7 @@ const io = new IOServer(app.server, {
   ...(config.env === "production" ? {} : { cors: { origin: true, credentials: true } }),
 });
 
-attachSocket(io, registry, store);
+attachSocket(io, registry, store, records);
 
 // 启动时把 Redis 里的快照捞回内存，让部署不打断正在进行的对局
 const restored = await store.restoreAll();

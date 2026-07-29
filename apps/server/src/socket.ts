@@ -18,6 +18,7 @@ import { logger } from "./logger.js";
 import { createCounter, createRateLimiter } from "./ratelimit.js";
 import type { Registry } from "./registry.js";
 import type { Store } from "./store.js";
+import type { Records } from "./records.js";
 import {
   advanceAutomatically,
   applyAction,
@@ -58,7 +59,12 @@ interface SocketData {
 
 type AppSocket = Socket & { data: SocketData };
 
-export const attachSocket = (io: IOServer, registry: Registry, store: Store): void => {
+export const attachSocket = (
+  io: IOServer,
+  registry: Registry,
+  store: Store,
+  records: Records,
+): void => {
   const msgLimiter = createRateLimiter(config.msgPerWindow, config.msgWindowMs);
   const pingLimiter = createRateLimiter(config.pingPerWindow, config.pingWindowMs);
   const reactLimiter = createRateLimiter(config.reactPerWindow, config.reactWindowMs);
@@ -424,6 +430,9 @@ export const attachSocket = (io: IOServer, registry: Registry, store: Store): vo
           room: snapshot.room,
           game: snapshot.game,
         });
+        // 归档进公开战绩与排行榜。**只在这里调** ——
+        // 它读全员真实身份，放在任何还没结束的分支里都是泄漏
+        void records.archive(room, now());
         pushLobby();
       }
     });
