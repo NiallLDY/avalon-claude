@@ -21,7 +21,7 @@ const make = (roles: readonly RoleId[] = FIVE): GameState => {
         mode: "STANDARD", ladyOfTheLake: false, earlyAssassination: false,
         leaderRotation: "CLOCKWISE", rejectCounting: "PER_ROUND",
         loyaltyFlipTiming: "NORMAL", hideLoyaltyFlipResult: false,
-        lancelotsKnowEachOther: false,
+        lancelotsKnowEachOther: false, spectatorsSeeRoles: false,
       },
       firstLeaderSeat: 0,
     },
@@ -104,6 +104,52 @@ describe("seatStats", () => {
     // 没动手的人分母是 0
     expect(stats[3]!.assassinated).toBe(0);
     // 梅林被刺中：进过刺杀阶段所以计入分母，但没活下来
+    expect(stats[0]!.asMerlin).toBe(1);
+    expect(stats[0]!.merlinSurvived).toBe(0);
+  });
+
+  /**
+   * 回归：**提前刺杀**下梅林被漏记。
+   *
+   * 原来的口径是「蓝方拿满三次任务才算被考验过」，可开了提前刺杀之后，
+   * 刺客打完 2 次任务就能开枪 —— 梅林实打实挨了一刀活下来了，
+   * 分子分母却都是 0，页面上显示「—」，看着像这局根本没当过梅林。
+   */
+  it("提前刺杀下梅林躲过一刀，也要算进存活率", () => {
+    const early = (): GameState => {
+      const g = make();
+      return { ...g, settings: { ...g.settings, earlyAssassination: true } };
+    };
+    let g = ackAll(early());
+    // 只打 2 轮任务就动手 —— 远不到三次成功
+    g = round(g, [0, 1], [true, true, true, true, true]);
+    g = round(g, [0, 1, 2], [true, true, true, true, true]);
+    expect(g.missions.filter((m) => m.success)).toHaveLength(2);
+
+    // 4 号是刺客：先发起提前刺杀进入刺杀阶段，再刺 1 号（不是梅林）→ 落空，红方判负
+    g = apply(g, { type: "EARLY_ASSASSINATE", seat: 4 });
+    g = apply(g, { type: "ASSASSINATE", seat: 4, targetSeat: 1 });
+    expect(g.outcome).toMatchObject({ reason: "ASSASSINATION_MISS" });
+
+    const stats = seatStats(g);
+    // 0 号是梅林：被瞄过一次并且活了下来
+    expect(stats[0]!.asMerlin, "提前刺杀没算进梅林的分母").toBe(1);
+    expect(stats[0]!.merlinSurvived, "梅林躲过一刀却没算存活").toBe(1);
+    // 刺客那边照旧记一次动手、没命中
+    expect(stats[4]!.assassinated).toBe(1);
+    expect(stats[4]!.assassinatedHit).toBe(0);
+  });
+
+  it("提前刺杀命中梅林：计入分母，不计入存活", () => {
+    const g0 = make();
+    let g = ackAll({ ...g0, settings: { ...g0.settings, earlyAssassination: true } });
+    g = round(g, [0, 1], [true, true, true, true, true]);
+    g = round(g, [0, 1, 2], [true, true, true, true, true]);
+    g = apply(g, { type: "EARLY_ASSASSINATE", seat: 4 });
+    g = apply(g, { type: "ASSASSINATE", seat: 4, targetSeat: 0 });
+    expect(g.outcome).toMatchObject({ reason: "ASSASSINATION_HIT" });
+
+    const stats = seatStats(g);
     expect(stats[0]!.asMerlin).toBe(1);
     expect(stats[0]!.merlinSurvived).toBe(0);
   });

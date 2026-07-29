@@ -7,7 +7,7 @@
  * 指标口径写在每个字段上。口径不写清楚，排行榜就是一堆没人看得懂的数字。
  */
 
-import { MISSIONS_TO_WIN, type RoleId, type Side } from "@avalon/shared";
+import type { RoleId, Side } from "@avalon/shared";
 import type { GameState } from "./types.js";
 
 /** 一局里某个座位的贡献。全部是可累加的计数，聚合时直接相加 */
@@ -118,10 +118,16 @@ export const seatStats = (state: GameState): readonly SeatStats[] => {
     const hit = didAssassinate && outcome.reason === "ASSASSINATION_HIT";
 
     const isMerlin = seat === merlinSeat;
-    // 「活下来」= 蓝方拿满三次任务、进了刺杀、且没被刺中。
-    // 红方靠任务赢的局里梅林根本没被考验过，不该算进存活率
-    const merlinTested =
-      isMerlin && state.missions.filter((m) => m.success).length >= MISSIONS_TO_WIN;
+    /*
+     * 「被考验过」= **真的有人开了枪**，而不是「蓝方拿满三次任务」。
+     *
+     * 原来按三次成功算，把**提前刺杀**整个漏掉了：那时刺客打完 2 次任务就能动手，
+     * 梅林实打实挨了一刀，却既不进分母也不进分子 —— 存活率显示「—」，
+     * 看起来就像这局根本没当过梅林。
+     *
+     * 红方靠任务赢、没走到刺杀的局仍然不算：那种局梅林确实没被考验过。
+     */
+    const merlinTested = isMerlin && outcome.assassinatedSeat !== null;
 
     return {
       ...ZERO,

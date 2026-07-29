@@ -60,6 +60,7 @@ export const gameSettingsSchema = z.object({
   loyaltyFlipTiming: z.enum(["NORMAL", "OPENING"]),
   hideLoyaltyFlipResult: z.boolean(),
   lancelotsKnowEachOther: z.boolean(),
+  spectatorsSeeRoles: z.boolean(),
 }) satisfies z.ZodType<GameSettings>;
 
 export const roomOptionsSchema = z.object({

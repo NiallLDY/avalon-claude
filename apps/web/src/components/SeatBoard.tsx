@@ -327,7 +327,13 @@ export const SeatBoard = ({
           );
           const revealed = game?.revealedVotes?.[seat];
           const isLady = game?.lady?.holderSeat === seat;
-          const role = game?.reveal?.[seat];
+          /*
+           * 身份：终局对所有人揭晓，或者观战全知视角（房主开了才有）。
+           * `spectate` 只可能出现在**没坐下的人**的视图里，在座玩家拿不到。
+           */
+          const role = game?.reveal?.[seat] ?? game?.spectate?.roles[seat];
+          // 兰斯洛特换过边之后当前阵营和角色牌对不上，颜色跟着当前阵营走
+          const roleSide = game?.spectate?.sides[seat] ?? (role ? ROLES[role].side : null);
 
           if (player === null) {
             // 空位。点一下就坐进去 —— 这是「挑一个和线下真实位置对应的号」的入口
@@ -549,13 +555,14 @@ export const SeatBoard = ({
                 {player.nick}
               </span>
 
-              {/* 终局才揭晓身份 */}
+              {/* 身份：终局揭晓，或观战全知视角 */}
               {role ? (
                 <span
                   className={`w-full truncate text-[0.6rem] leading-tight
-                    ${ROLES[role].side === "RED" ? "text-red" : "text-blue"}`}
+                    ${roleSide === "RED" ? "text-red" : "text-blue"}`}
                 >
                   {ROLES[role].name}
+                  {roleSide !== null && roleSide !== ROLES[role].side ? " ⇄" : ""}
                 </span>
               ) : null}
             </button>

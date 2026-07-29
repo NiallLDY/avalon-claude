@@ -26,6 +26,7 @@ const settings = (over: Partial<GameSettings> = {}): GameSettings => ({
   loyaltyFlipTiming: "NORMAL",
   hideLoyaltyFlipResult: false,
   lancelotsKnowEachOther: false,
+  spectatorsSeeRoles: false,
   ...over,
 });
 
@@ -345,5 +346,83 @@ describe("自己的视野", () => {
       );
       expect(view.me!.canAssassinate, label).toBe(viewer === assassin);
     });
+  });
+});
+
+/**
+ * 观战者全知视角（GAME.md §11）。这是**唯一**一个允许把身份发出去的口子，
+ * 所以三件事都要钉死：开关关着时什么都没有、开着时也只有观战者拿得到、
+ * 在座玩家的视图一个字节都不变。
+ */
+describe("观战者全知视角", () => {
+  const withFlag = (on: boolean) =>
+    playThrough(
+      makeGame(SEVEN_LANCELOT, {
+        mode: "LANCELOT",
+        lancelotsKnowEachOther: true,
+        spectatorsSeeRoles: on,
+      }),
+      true,
+    );
+
+  const seats = (state: GameState) =>
+    Array.from({ length: state.playerCount }, (_, i) => i);
+
+  it("开关关着时，观战者拿不到 spectate", () => {
+    for (const [i, state] of withFlag(false).entries()) {
+      expect(projectFor(state, null).spectate, `#${i}`).toBeNull();
+    }
+  });
+
+  it("开着时，观战者能看到全员角色、当前阵营和各自的视野", () => {
+    const states = withFlag(true);
+    let sawMidGame = 0;
+    for (const [i, state] of states.entries()) {
+      const view = projectFor(state, null);
+      if (state.phase === "GAME_OVER") {
+        // 终局 reveal 已经对所有人公开，不必再多发一份
+        expect(view.spectate, `#${i}`).toBeNull();
+        continue;
+      }
+      sawMidGame++;
+      expect(view.spectate?.roles, `#${i}`).toEqual([...state.roles]);
+      expect(view.spectate?.sides, `#${i}`).toEqual([...state.sides]);
+      expect(view.spectate?.visions, `#${i}`).toEqual(state.vision.map((v) => ({ ...v })));
+    }
+    expect(sawMidGame, "一个对局中的状态都没验到").toBeGreaterThan(10);
+  });
+
+  it("**在座玩家永远拿不到 spectate**，哪怕开关开着", () => {
+    for (const [i, state] of withFlag(true).entries()) {
+      for (const seat of seats(state)) {
+        expect(projectFor(state, seat).spectate, `#${i}/seat=${seat}`).toBeNull();
+      }
+    }
+  });
+
+  it("开关不改变在座玩家看到的任何东西", () => {
+    // 同一个 seed 打两遍，只有开关不同 —— 逐状态逐座位比对完整视图
+    const off = withFlag(false);
+    const on = withFlag(true);
+    expect(on).toHaveLength(off.length);
+    for (const [i, state] of off.entries()) {
+      for (const seat of seats(state)) {
+        expect(projectFor(on[i]!, seat), `#${i}/seat=${seat}`).toEqual(projectFor(state, seat));
+      }
+    }
+  });
+
+  it("兰斯洛特换边后，观战者看到的是**当前**阵营，不是角色牌上那个", () => {
+    const states = withFlag(true).filter(
+      (s) => s.phase !== "GAME_OVER" && s.sides.some((side, seat) => ROLES[s.roles[seat]!].side !== side),
+    );
+    expect(states.length, "这局没换过边，用例白跑了").toBeGreaterThan(0);
+    for (const state of states) {
+      const spectate = projectFor(state, null).spectate!;
+      const swapped = seats(state).filter((i) => ROLES[state.roles[i]!].side !== spectate.sides[i]);
+      // 换边的只可能是兰斯洛特，而且必然是两个一起换
+      expect(swapped).toHaveLength(2);
+      for (const seat of swapped) expect(ROLES[state.roles[seat]!].isLancelot).toBe(true);
+    }
   });
 });

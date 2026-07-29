@@ -328,6 +328,13 @@ export const Room = () => {
               onChange={(ladyOfTheLake) => patch({ ladyOfTheLake })}
             />
             <Toggle
+              label="观战者看身份"
+              hint="没坐下的人能看到所有人的角色和视野。开局后改不了 —— 观战的就坐在旁边，想清楚再开"
+              checked={s.spectatorsSeeRoles}
+              disabled={!host}
+              onChange={(spectatorsSeeRoles) => patch({ spectatorsSeeRoles })}
+            />
+            <Toggle
               label="提前刺杀"
               hint="打完 2 次任务后，刺客可以随时动手；刺错人红方当场输"
               checked={s.earlyAssassination}

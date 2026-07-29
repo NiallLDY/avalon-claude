@@ -74,7 +74,7 @@ const METRICS: readonly {
   {
     label: "梅林存活率",
     of: (s) => [s.merlinSurvived, s.asMerlin],
-    hint: "当梅林、且蓝方拿满三次任务进了刺杀的局里，躲过一刀的比例",
+    hint: "当梅林、且真的有人开了枪的局里，躲过一刀的比例（含提前刺杀）",
   },
 ];
 

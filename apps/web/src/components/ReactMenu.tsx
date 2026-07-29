@@ -12,7 +12,16 @@
 
 import { useEffect, useRef } from "react";
 import { m } from "motion/react";
-import { EMOTES, REACTIONS, REACTION_META, type Reaction } from "@avalon/shared";
+import {
+  EMOTES,
+  REACTIONS,
+  REACTION_META,
+  ROLES,
+  type Reaction,
+  type RoleId,
+  type Side,
+  type Vision,
+} from "@avalon/shared";
 
 interface Anchor {
   /** 相对棋盘容器的位置。**量的是头像中心**，不是整个座位格 —— 格子里还有号牌和昵称，
@@ -152,6 +161,71 @@ export const EmoteMenu = ({
       </div>
   </Panel>
 );
+
+/**
+ * 观战者点头像看这个人是谁、他知道什么。
+ *
+ * 只有房主开了「观战者看身份」时才可能渲染到 —— 数据源是 `game.spectate`，
+ * 在座玩家的视图里那个字段恒为 null，前端连素材都拿不到（铁律 2）。
+ */
+export const SpectatorPeek = ({
+  anchor,
+  seat,
+  roleId,
+  side,
+  vision,
+  nickOf,
+  onClose,
+}: {
+  anchor: Anchor;
+  seat: number;
+  roleId: RoleId;
+  side: Side;
+  vision: Vision;
+  /** 座位号 → 「3 号 老王」，视野里提到的人都要带号码 */
+  nickOf: (seat: number) => string;
+  onClose: () => void;
+}) => {
+  const meta = ROLES[roleId];
+  // 兰斯洛特换过边之后，角色牌和当前阵营就对不上了 —— 这正是观战最值得看的一幕
+  const swapped = meta.side !== side;
+  const line = (label: string, seats: readonly number[]) =>
+    seats.length === 0 ? null : (
+      <p key={label} className="text-[0.62rem] leading-snug text-ink-mute">
+        {label}
+        <span className="text-ink">{seats.map(nickOf).join("、")}</span>
+      </p>
+    );
+
+  return (
+    <Panel anchor={anchor} onClose={onClose}>
+      <div className="max-w-[12rem] space-y-1 p-1.5">
+        <p className="flex items-baseline gap-1.5">
+          <span className="text-[0.68rem] font-bold tabular-nums text-ink-mute">{seat + 1}</span>
+          <span className={`text-sm font-medium ${side === "RED" ? "text-red" : "text-blue"}`}>
+            {meta.name}
+          </span>
+          {swapped ? (
+            <span className="rounded bg-gold/20 px-1 text-[0.55rem] text-gold">已换边</span>
+          ) : null}
+        </p>
+        <p className="text-[0.6rem] leading-snug text-ink-mute">{meta.tagline}</p>
+        <div className="space-y-0.5 border-t border-line pt-1">
+          {line("他看到的红方：", vision.evilSeats)}
+          {line("他看到的梅林候选：", vision.merlinCandidates)}
+          {vision.counterpartSeat !== null
+            ? line("另一位兰斯洛特：", [vision.counterpartSeat])
+            : null}
+          {vision.evilSeats.length === 0 &&
+          vision.merlinCandidates.length === 0 &&
+          vision.counterpartSeat === null ? (
+            <p className="text-[0.62rem] text-ink-mute">他什么都不知道</p>
+          ) : null}
+        </div>
+      </div>
+    </Panel>
+  );
+};
 
 /**
  * 点浮层**外面**才关。

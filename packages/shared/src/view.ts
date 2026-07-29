@@ -101,4 +101,21 @@ export interface ClientGameView {
 
   /** 观战者为 null */
   readonly me: SelfView | null;
+
+  /**
+   * 观战者的全知视角。**对在座玩家永远是 null**，一个字都不给。
+   *
+   * 三个条件缺一不可才有值：房主开了 `spectatorsSeeRoles`、观察者没坐下、
+   * 而且这局确实在进行。见 GAME.md §11。
+   */
+  readonly spectate: SpectatorView | null;
+}
+
+/** 观战者全知视角。裁剪逻辑见 `projectFor`，安全断言见 projection.test.ts */
+export interface SpectatorView {
+  readonly roles: readonly RoleId[];
+  /** 当前阵营。兰斯洛特换过边之后和 roles 对不上，这是故意的 */
+  readonly sides: readonly Side[];
+  /** 每个座位各自看到的东西 —— 点开某个人时展示「他知道什么」 */
+  readonly visions: readonly Vision[];
 }

@@ -862,7 +862,16 @@ test.describe("对局记录", () => {
      * 才凑够三胜，写死 3 轮会停在还没进刺杀的地方。
      */
     for (let round = 0; round < 5; round++) {
-      if ((await host.getByText(/挑 \d+ 个人/).count()) === 0) break;
+      /*
+       * 等本轮组队界面真的出来再动手。
+       * 直接查 count 会在上一轮结果弹窗还没收完时读到 0，提前跳出循环；
+       * 等不到就说明已经进刺杀或终局了，正常收工。
+       */
+      try {
+        await host.getByText(/挑 \d+ 个人/).waitFor({ timeout: 10_000 });
+      } catch {
+        break;
+      }
       let leader = host;
       for (const p of pages) {
         if ((await p.locator("main").innerText()).includes("选 ")) { leader = p; break; }
@@ -1000,6 +1009,108 @@ test.describe("兰斯洛特互认", () => {
     // 而且互相指向对方 —— 卡上写的是座位号
     expect(a.target).toContain(String(b.seat + 1));
     expect(b.target).toContain(String(a.seat + 1));
+
+    for (const c of ctxs) await c.close();
+  });
+});
+
+test.describe("观战者看身份", () => {
+  /**
+   * 房主开关，默认关。这条既验观战者真能看到，
+   * 也验**在座玩家一个字都没多拿** —— 后者才是这功能的风险所在。
+   */
+  test("开了之后观战者能看全员身份，在座玩家什么都没多看到", async ({ browser }) => {
+    test.setTimeout(120_000);
+    // 5 个玩家 + 1 个观战
+    const ctxs = await Promise.all(
+      Array.from({ length: 6 }, () => browser.newContext({ locale: "zh-CN" })),
+    );
+    const pages = await Promise.all(ctxs.map((c) => c.newPage()));
+    for (const [i, p] of pages.entries()) await openApp(p, i === 5 ? "看客" : `观${i + 1}`);
+    const players = pages.slice(0, 5);
+    const watcher = pages[5]!;
+
+    const host = players[0]!;
+    const code = await createRoom(host, "旁观局甲");
+    await host.getByRole("button", { name: "设置" }).click();
+    const sheet = host.getByRole("dialog");
+    await sheet.getByRole("button", { name: /观战者看身份/ }).click();
+    await host.keyboard.press("Escape");
+    await expect(host.getByRole("dialog")).toHaveCount(0);
+
+    await sit(host, 0);
+    for (const [i, p] of players.slice(1).entries()) {
+      await p.getByPlaceholder("房间码").fill(code);
+      await p.getByRole("button", { name: "进", exact: true }).click();
+      await sit(p, i + 1);
+    }
+    // 看客进房但不坐
+    await watcher.getByPlaceholder("房间码").fill(code);
+    await watcher.getByRole("button", { name: "进", exact: true }).click();
+
+    for (const p of players) await p.getByRole("button", { name: "准备" }).click();
+    await host.getByRole("button", { name: "开始游戏" }).click();
+    for (const p of players) {
+      await p.getByRole("dialog").getByRole("button", { name: /点击查看身份/ }).click();
+      await p.keyboard.press("Escape");
+      await expect(p.getByRole("dialog")).toHaveCount(0);
+    }
+
+    // ── 观战者：五个角色名全在座位板上 ──
+    await expect(watcher.getByText("观战", { exact: true })).toBeVisible();
+    await expect(watcher.getByText("梅林", { exact: true })).toBeVisible();
+    await expect(watcher.getByText("莫甘娜", { exact: true })).toBeVisible();
+    await expect(watcher.getByText("刺客", { exact: true })).toBeVisible();
+
+    // 点梅林那格 → 弹出他的视野
+    const merlinSeat = await watcher
+      .locator("button[data-seat]")
+      .filter({ hasText: "梅林" })
+      .getAttribute("data-seat");
+    expect(merlinSeat, "座位板上没找到梅林").not.toBeNull();
+    await watcher.locator(`button[data-seat="${merlinSeat}"]`).click();
+    await expect(watcher.getByText("他看到的红方：")).toBeVisible();
+
+    // ── 在座玩家：一个角色名都不该多出来 ──
+    for (const [i, p] of players.entries()) {
+      const main = await p.locator("body").innerText();
+      // 自己的身份卡是盖着的，桌面上不该出现任何角色名
+      for (const role of ["梅林", "莫甘娜", "刺客", "派西维尔", "忠臣"]) {
+        expect(main.includes(role), `座位 ${i} 的屏幕上出现了「${role}」`).toBe(false);
+      }
+    }
+
+    for (const c of ctxs) await c.close();
+  });
+
+  test("默认关着的时候，观战者看不到身份", async ({ browser }) => {
+    test.setTimeout(120_000);
+    const ctxs = await Promise.all(
+      Array.from({ length: 6 }, () => browser.newContext({ locale: "zh-CN" })),
+    );
+    const pages = await Promise.all(ctxs.map((c) => c.newPage()));
+    for (const [i, p] of pages.entries()) await openApp(p, i === 5 ? "看客2" : `默${i + 1}`);
+    const players = pages.slice(0, 5);
+    const watcher = pages[5]!;
+
+    const host = players[0]!;
+    const code = await createRoom(host, "旁观局乙");
+    await sit(host, 0);
+    for (const [i, p] of players.slice(1).entries()) {
+      await p.getByPlaceholder("房间码").fill(code);
+      await p.getByRole("button", { name: "进", exact: true }).click();
+      await sit(p, i + 1);
+    }
+    await watcher.getByPlaceholder("房间码").fill(code);
+    await watcher.getByRole("button", { name: "进", exact: true }).click();
+    for (const p of players) await p.getByRole("button", { name: "准备" }).click();
+    await host.getByRole("button", { name: "开始游戏" }).click();
+
+    await expect(watcher.getByText("观战", { exact: true })).toBeVisible();
+    const seen = await watcher.locator("body").innerText();
+    for (const role of ["梅林", "莫甘娜", "刺客", "派西维尔"]) {
+      expect(seen.includes(role), `观战者看到了「${role}」`).toBe(false);
+    }
 
     for (const c of ctxs) await c.close();
   });

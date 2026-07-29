@@ -17,7 +17,7 @@ import {
 } from "@avalon/shared";
 import { PlayerChips } from "../components/PlayerChip.js";
 import { ProfileButton } from "../components/Profile.js";
-import { EmoteMenu, ThrowMenu } from "../components/ReactMenu.js";
+import { EmoteMenu, SpectatorPeek, ThrowMenu } from "../components/ReactMenu.js";
 import { SeatBoard } from "../components/SeatBoard.js";
 import { RoleCard } from "../components/RoleCard.js";
 import { Button, Latency, Sheet } from "../components/ui.js";
@@ -192,6 +192,12 @@ export const Game = () => {
   if (!state || !game) return null;
   const { room } = state;
   const me = game.me;
+  /*
+   * 观战者的全知视角。只有房主开了开关、而且自己没坐下时服务端才会下发；
+   * 在座玩家这里恒为 null —— 不是前端「不显示」，是根本没发过来。
+   */
+  const spectate = game.spectate;
+  const who = labeler(room.seats);
   const isHost = room.hostId === selfId;
 
   // ── 各阶段的可选座位 ──
@@ -232,7 +238,10 @@ export const Game = () => {
   const reactable: number[] =
     phase === "TEAM_BUILD" && me && selectable.length === 0
       ? room.seats.flatMap((p, i) => (p ? [i] : []))
-      : [];
+      : // 观战全知视角：任何阶段点谁都能看他是谁、他知道什么
+        spectate
+        ? room.seats.flatMap((p, i) => (p ? [i] : []))
+        : [];
 
   /** 中心提示：结果类阶段的一行大字 */
   const waitingText = (): string | null => {
@@ -274,7 +283,17 @@ export const Game = () => {
         onReact={setReactTarget}
         menuSeat={reactTarget}
         renderMenu={(anchor) =>
-          reactTarget === null ? null : reactTarget === me?.seat ? (
+          reactTarget === null ? null : spectate ? (
+            <SpectatorPeek
+              anchor={anchor}
+              seat={reactTarget}
+              roleId={spectate.roles[reactTarget]!}
+              side={spectate.sides[reactTarget]!}
+              vision={spectate.visions[reactTarget]!}
+              nickOf={who.full}
+              onClose={() => setReactTarget(null)}
+            />
+          ) : reactTarget === me?.seat ? (
             <EmoteMenu
               anchor={anchor}
               onClose={() => setReactTarget(null)}

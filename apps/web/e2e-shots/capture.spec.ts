@@ -27,11 +27,12 @@ const openApp = async (page: Page, nick: string) => {
   await expect(page.getByRole("button", { name: "开房间" })).toBeVisible();
 };
 
+const NICKS = ["阿隆", "小梅", "老王", "阿飞", "球球"];
+
 test("拍完整一局", async ({ browser }) => {
   test.setTimeout(300_000);
   await mkdir(OUT, { recursive: true });
 
-  const NICKS = ["阿隆", "小梅", "老王", "阿飞", "球球"];
   const contexts: BrowserContext[] = [];
   const pages: Page[] = [];
 
@@ -295,4 +296,62 @@ test("拍完整一局", async ({ browser }) => {
   await shot(host, "对局复盘");
 
   for (const ctx of contexts) await ctx.close();
+});
+
+/** 观战全知视角 —— 房主开关，默认关，见 GAME.md §11.1 */
+test("拍观战视角", async ({ browser }) => {
+  test.setTimeout(180_000);
+  const ctxs = await Promise.all(
+    Array.from({ length: 6 }, () => browser.newContext({ locale: "zh-CN" })),
+  );
+  const pages = await Promise.all(ctxs.map((c) => c.newPage()));
+  for (const [i, p] of pages.entries()) await openApp(p, i === 5 ? "看客" : NICKS[i]!);
+  const players = pages.slice(0, 5);
+  const watcher = pages[5]!;
+  const host = players[0]!;
+
+  await host.getByRole("button", { name: "开房间" }).click();
+  await host.getByPlaceholder(/的房间$/).fill("观战局");
+  await host.getByRole("button", { name: "创建" }).click();
+  const code = (await host.locator("p.font-display").first().textContent())!.trim();
+
+  await host.getByRole("button", { name: "设置" }).click();
+  await host.getByRole("dialog").getByRole("button", { name: /观战者看身份/ }).click();
+  await shot(host, "观战-房主开关");
+  await host.keyboard.press("Escape");
+  await expect(host.getByRole("dialog")).toHaveCount(0);
+
+  await host.getByRole("button", { name: "坐这 1" }).click();
+  for (const [i, p] of players.slice(1).entries()) {
+    await p.getByPlaceholder("房间码").fill(code);
+    await p.getByRole("button", { name: "进", exact: true }).click();
+    await expect(p.locator("p.font-display").first()).toHaveText(code);
+    await p.getByRole("button", { name: `坐这 ${i + 2}` }).click();
+  }
+  await watcher.getByPlaceholder("房间码").fill(code);
+  await watcher.getByRole("button", { name: "进", exact: true }).click();
+
+  for (const p of players) await p.getByRole("button", { name: "准备" }).click();
+  await host.getByRole("button", { name: "开始游戏" }).click();
+  for (const p of players) {
+    await p.getByRole("dialog").getByRole("button", { name: /点击查看身份/ }).click();
+    await p.keyboard.press("Escape");
+    await expect(p.getByRole("dialog")).toHaveCount(0);
+  }
+
+  await expect(watcher.getByText("梅林", { exact: true })).toBeVisible();
+  await shot(watcher, "观战-全知视角");
+
+  const merlinSeat = await watcher
+    .locator("button[data-seat]")
+    .filter({ hasText: "梅林" })
+    .getAttribute("data-seat");
+  await watcher.locator(`button[data-seat="${merlinSeat}"]`).click();
+  await expect(watcher.getByText("他看到的红方：")).toBeVisible();
+  await shot(watcher, "观战-点开某人");
+
+  // 对照：同一时刻在座玩家看到的桌面
+  await shot(players[1]!, "观战-在座玩家对照");
+
+  for (const c of ctxs) await c.close();
 });

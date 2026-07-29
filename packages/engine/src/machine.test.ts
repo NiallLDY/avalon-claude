@@ -26,6 +26,7 @@ const settings = (over: Partial<GameSettings> = {}): GameSettings => ({
   loyaltyFlipTiming: "NORMAL",
   hideLoyaltyFlipResult: false,
   lancelotsKnowEachOther: false,
+  spectatorsSeeRoles: false,
   ...over,
 });
 

@@ -92,9 +92,26 @@ export const projectFor = (state: GameState, viewerSeat: number | null): ClientG
     reveal: isOver ? [...state.roles] : null,
 
     me: null,
+    spectate: null,
   };
 
-  if (viewerSeat === null) return view;
+  if (viewerSeat === null) {
+    /*
+     * 观战者的全知视角（GAME.md §11）。**只有这一个分支能产出 spectate** ——
+     * 下面在座玩家的返回值里它恒为 null，不是靠调用方自觉。
+     *
+     * 终局之后不用再给：那时 reveal 已经对所有人公开了。
+     */
+    if (!state.settings.spectatorsSeeRoles || isOver) return view;
+    return {
+      ...view,
+      spectate: {
+        roles: [...state.roles],
+        sides: [...state.sides],
+        visions: state.vision.map((v) => ({ ...v })),
+      },
+    };
+  }
 
   const roleId = state.roles[viewerSeat];
   const side = state.sides[viewerSeat];

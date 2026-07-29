@@ -36,6 +36,17 @@ export interface GameSettings {
    * 原文注明「Recommended for larger groups only」，所以默认关。
    */
   readonly lancelotsKnowEachOther: boolean;
+  /**
+   * 观战者全知视角：看得到所有人的角色、当前阵营和各自的视野。
+   *
+   * 默认关，且**开局后改不了**（`setSettings` 在对局中直接拒）——
+   * 中途打开等于突然给场边发底牌。
+   *
+   * 这条只对**没坐下的人**生效；在座玩家的视图一个字都不变。
+   * 注意它挡不住「自己开个小号观战」——线下同桌游戏本来就靠人盯人，
+   * 房主自己掂量要不要开。
+   */
+  readonly spectatorsSeeRoles: boolean;
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
@@ -47,6 +58,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   loyaltyFlipTiming: "NORMAL",
   hideLoyaltyFlipResult: false,
   lancelotsKnowEachOther: false,
+  spectatorsSeeRoles: false,
 };
 
 /**
