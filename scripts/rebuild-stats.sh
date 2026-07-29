@@ -22,6 +22,8 @@ log "构建"
 docker compose build app >/dev/null
 
 log "重算（对局归档只读，不会被改）"
-docker compose run --rm --no-deps app node dist/rebuild-stats.js
+# 路径跟 Dockerfile 走：产物在 apps/server/dist，WORKDIR 是 /app。
+# **不是 dist/** —— 那是开发容器里的相对路径，生产镜像里没有。
+docker compose run --rm --no-deps app node apps/server/dist/rebuild-stats.js
 
 log "完成。刷新排行榜页面即可看到新数字"

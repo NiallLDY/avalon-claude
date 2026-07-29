@@ -22,22 +22,32 @@ import { createRecords } from "./records.js";
 
 const redis = new Redis(config.redisUrl, { maxRetriesPerRequest: 3 });
 
+const records = createRecords(redis);
+
 try {
-  const before = await createRecords(redis).leaderboard(500);
-  const { matches, players } = await createRecords(redis).rebuildStats();
-  const after = await createRecords(redis).leaderboard(500);
+  // 用 allPlayers 而不是 leaderboard —— 后者有「打满 5 局」的门槛，
+  // 小圈子会一行差异都打不出来，看着就像没干活
+  const before = await records.allPlayers();
+  const { matches, players } = await records.rebuildStats();
+  const after = await records.allPlayers();
 
   logger.info({ matches, players }, "重算完成");
 
   // 把变化打出来 —— 跑完看不见差异的话，没人知道它到底干了什么
   const pct = (n: number, d: number) => (d > 0 ? `${Math.round((n / d) * 100)}%` : "—");
+  let touched = 0;
   for (const a of after) {
     const b = before.find((x) => x.id === a.id);
-    if (!b) continue;
+    if (!b) {
+      process.stdout.write(`${a.nick}（${a.stats.games} 局）新建档案\n`);
+      touched++;
+      continue;
+    }
     const changed = (Object.keys(a.stats) as (keyof typeof a.stats)[]).filter(
       (k) => a.stats[k] !== b.stats[k],
     );
     if (changed.length === 0) continue;
+    touched++;
     process.stdout.write(
       `${a.nick}（${a.stats.games} 局）\n` +
         changed.map((k) => `    ${k}: ${b.stats[k]} → ${a.stats[k]}`).join("\n") +
@@ -45,6 +55,12 @@ try {
         ` → ${pct(a.stats.merlinSurvived, a.stats.asMerlin)}\n`,
     );
   }
+  // 说清楚「真的没有变化」，别让沉默看起来像没跑
+  process.stdout.write(
+    touched === 0
+      ? `扫了 ${matches} 局 / ${after.length} 人，按当前口径算出来的数字和档案里原本的完全一致，无需改动。\n`
+      : `共 ${touched} 人的数字有变化（扫了 ${matches} 局 / ${after.length} 人）。\n`,
+  );
 } catch (e) {
   logger.error({ err: String(e) }, "重算失败");
   process.exitCode = 1;

@@ -333,6 +333,27 @@ export const createRecords = (redis: Redis) => {
     }
   };
 
+  /**
+   * 所有玩家的档案，不设局数门槛。
+   *
+   * 和 `leaderboard` 的区别就是这个门槛 —— 重算脚本要对比前后差异，
+   * 用榜单的话，人均不到 5 局的小圈子会一行都打不出来，
+   * 看着就像脚本没干活（正是当初「数据怎么没变」那个困惑）。
+   */
+  const allPlayers = async (): Promise<PlayerRecord[]> => {
+    const ids = await redis.zrevrange(PLAYER_INDEX, 0, -1);
+    if (ids.length === 0) return [];
+    const raw = await redis.mget(ids.map(playerKey));
+    return raw.flatMap((json) => {
+      if (!json) return [];
+      try {
+        return [JSON.parse(json) as PlayerRecord];
+      } catch {
+        return [];
+      }
+    });
+  };
+
   /** 某人的档案 + 他打过的局 */
   const player = async (id: string): Promise<{ profile: PlayerRecord; matches: MatchRecord[] } | null> => {
     const profile = await readPlayer(id);
@@ -341,7 +362,7 @@ export const createRecords = (redis: Redis) => {
     return { profile, matches: all.filter((m) => m.seats.some((s) => s.playerId === id)).slice(0, 30) };
   };
 
-  return { archive, leaderboard, recentMatches, match, player, readPlayer, rebuildStats };
+  return { archive, allPlayers, leaderboard, recentMatches, match, player, readPlayer, rebuildStats };
 };
 
 export type Records = ReturnType<typeof createRecords>;
