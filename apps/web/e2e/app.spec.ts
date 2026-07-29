@@ -689,3 +689,113 @@ test.describe("长昵称", () => {
     expect(overflow, "座位区把页面撑出了一屏").toBeLessThanOrEqual(0);
   });
 });
+
+test.describe("湖中女神", () => {
+  test("查验完当场出结果，且只有女神本人看得到", async ({ browser }) => {
+    test.setTimeout(120_000);
+    // 女神要 7 人起
+    const ctxs = await Promise.all(
+      Array.from({ length: 7 }, () => browser.newContext({ locale: "zh-CN" })),
+    );
+    const pages = await Promise.all(ctxs.map((c) => c.newPage()));
+    for (const [i, p] of pages.entries()) await openApp(p, `玩家${i + 1}`);
+
+    const host = pages[0]!;
+    const code = await createRoom(host, "女神测试");
+    await host.getByRole("button", { name: "设置" }).click();
+    const sheet = host.getByRole("dialog");
+    await sheet.getByRole("button", { name: "7", exact: true }).click();
+    await sheet.getByRole("button", { name: /湖中女神/ }).click();
+    await host.keyboard.press("Escape");
+    await expect(host.getByRole("dialog")).toHaveCount(0);
+
+    await sit(host, 0);
+    for (const [i, p] of pages.slice(1).entries()) {
+      await p.getByPlaceholder("房间码").fill(code);
+      await p.getByRole("button", { name: "进", exact: true }).click();
+      await sit(p, i + 1);
+    }
+    for (const p of pages) await p.getByRole("button", { name: "准备" }).click();
+    await host.getByRole("button", { name: "开始游戏" }).click();
+    for (const p of pages) {
+      await p.getByRole("dialog").getByRole("button", { name: /点击查看身份/ }).click();
+      await p.keyboard.press("Escape");
+      await expect(p.getByRole("dialog")).toHaveCount(0);
+    }
+
+    /** 打一轮：队长全选前几个，全票通过，能出成功就出成功 */
+    const playRound = async () => {
+      await expect(host.getByText(/挑 \d+ 个人/)).toBeVisible();
+      let leader = host;
+      for (const p of pages) {
+        if ((await p.locator("main").innerText()).includes("选 ")) {
+          leader = p;
+          break;
+        }
+      }
+      const need = Number((await leader.getByText(/挑 \d+ 个人/).textContent())!.match(/\d+/)![0]);
+      const seats = leader.locator("button[data-seat]:not([disabled])");
+      for (let i = 0; i < need; i++) await seats.nth(i).click();
+      await leader.getByRole("button", { name: /^确认 \d/ }).click();
+
+      for (const p of pages) await p.getByRole("button", { name: "赞成" }).click();
+      for (const p of pages) {
+        const ok = p.getByRole("button", { name: "知道了" });
+        if (await ok.isVisible().catch(() => false)) await ok.click();
+      }
+      await host.getByRole("button", { name: "立即继续" }).click();
+
+      for (const p of pages) {
+        const ok = p.getByRole("button", { name: "任务成功" });
+        if (await ok.isVisible().catch(() => false)) await ok.click();
+      }
+      for (const p of pages) {
+        const ok = p.getByRole("button", { name: "知道了" });
+        if (await ok.isVisible().catch(() => false)) await ok.click();
+      }
+      const skip = host.getByRole("button", { name: "立即继续" });
+      if (await skip.isVisible().catch(() => false)) await skip.click();
+    };
+
+    // 第 2 轮任务结束后才轮到女神
+    await playRound();
+    await playRound();
+
+    /*
+     * 找当代女神那一页。**不能用「包含"查验"」判断** ——
+     * 别人页面上写的是「等湖中女神查验」，也含这两个字。
+     * 女神那页底部是「选一个人查验」按钮，别人没有。
+     */
+    let ladyPage: Page | null = null;
+    for (const p of pages) {
+      if ((await p.locator("main").innerText()).includes("选一个人查验")) {
+        ladyPage = p;
+        break;
+      }
+    }
+    expect(ladyPage, "没找到当代女神").not.toBeNull();
+
+    // 挑一个能查的人
+    await ladyPage!.locator("button[data-seat]:not([disabled])").first().click();
+    await ladyPage!.getByRole("button", { name: /^查验 / }).click();
+
+    /*
+     * 关键：查完当场就要出结果。
+     * 之前结果只藏在身份卡里，玩家得自己想到去翻 —— 实际反馈就是「查了什么都没看到」。
+     */
+    const verdict = ladyPage!.locator("p.font-display").filter({ hasText: /^(红方|蓝方)$/ });
+    await expect(verdict).toBeVisible();
+    await expect(ladyPage!.getByText(/只有你看得到这个结果/)).toBeVisible();
+
+    // 别人一个字都不能看到
+    for (const p of pages) {
+      if (p === ladyPage) continue;
+      await expect(p.getByText(/只有你看得到这个结果/)).toHaveCount(0);
+      await expect(
+        p.locator("p.font-display").filter({ hasText: /^(红方|蓝方)$/ }),
+      ).toHaveCount(0);
+    }
+
+    for (const c of ctxs) await c.close();
+  });
+});

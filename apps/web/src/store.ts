@@ -47,7 +47,14 @@ export type ResultCard =
       readonly failsRequired: 1 | 2;
       readonly team: readonly number[];
     }
-  | { readonly kind: "LOYALTY"; readonly id: number; readonly swapped: boolean | null };
+  | { readonly kind: "LOYALTY"; readonly id: number; readonly swapped: boolean | null }
+  /** 女神查验结果。**只有查验人自己会拿到这张卡** */
+  | {
+      readonly kind: "LADY";
+      readonly id: number;
+      readonly targetSeat: number;
+      readonly side: "BLUE" | "RED";
+    };
 
 interface Toast {
   readonly id: number;
@@ -270,7 +277,31 @@ export const useStore = create<AppState>((set, get) => ({
 
     socket.on("state", (payload: StatePayload) => {
       saveLastRoom(payload.room.id);
+      const previous = get().state;
       set({ state: payload, restoring: false });
+
+      /*
+       * 湖中女神查到的结果**只推给她本人**（在 me.myLadyChecks 里），
+       * 所以不能靠广播的 event 来弹 —— 那样全场都看得到，等于把查验结果公开了。
+       * 改成看自己这份 checks 有没有变长。
+       *
+       * 之前这个结果只藏在身份卡里：查完什么都不显示，玩家得自己想到去翻身份卡。
+       * 实际反馈就是「查了但没看到任何信息」。
+       */
+      const before = previous?.game?.me?.myLadyChecks.length ?? 0;
+      const after = payload.game?.me?.myLadyChecks.length ?? 0;
+      // previous?.game 为空说明是刚进房/重连，那时的 checks 是历史记录，不该补弹
+      if (previous?.game && after > before) {
+        const check = payload.game!.me!.myLadyChecks[after - 1]!;
+        set({
+          result: {
+            kind: "LADY",
+            id: ++resultSeq,
+            targetSeat: check.targetSeat,
+            side: check.side,
+          },
+        });
+      }
 
       // 终局画面留一份在本地，等本人点掉；新的一局开始就顶掉它
       if (payload.game?.phase === "GAME_OVER") {

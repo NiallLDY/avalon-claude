@@ -178,6 +178,30 @@ const Body = ({
     );
   }
 
+  if (card.kind === "LADY") {
+    const red = card.side === "RED";
+    return (
+      <>
+        <p className={`slam font-display text-3xl ${red ? "text-red" : "text-blue"}`}>
+          {red ? "红方" : "蓝方"}
+        </p>
+        <div className="rise-in mt-4 flex justify-center" style={{ animationDelay: "0.16s" }}>
+          <PlayerChip
+            player={seated[card.targetSeat]}
+            seat={card.targetSeat}
+            tone={red ? "red" : "blue"}
+            size={28}
+          />
+        </div>
+        <p className="rise-in mt-4 text-xs leading-relaxed text-ink-mute" style={{ animationDelay: "0.26s" }}>
+          只有你看得到这个结果。
+          <br />
+          要不要说、说不说实话，都是你的事。
+        </p>
+      </>
+    );
+  }
+
   return (
     <>
       <p className="slam font-display text-3xl text-gold">忠诚牌</p>
