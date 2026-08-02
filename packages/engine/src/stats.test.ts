@@ -135,6 +135,33 @@ describe("seatStats", () => {
     expect(stats[2]!.votedReject).toBe(2);
   });
 
+  /** 狼人上车率：反过来的一对，只统计自己是红方的局 */
+  it("狼人上车率只算通过的车，且只算自己是红方的局", () => {
+    let g = ackAll(make());
+    // 第一车带上 3 号（莫甘娜），通过 —— 3 号上车，4 号没上
+    g = round(g, [0, 3], [true, true, true, true, true]);
+    // 干净的车被否掉：谁都没上过路，不该进分母
+    g = apply(g, { type: "PROPOSE_TEAM", seat: 1, team: [0, 1, 2], speakDirection: null });
+    for (const [s] of g.roles.entries()) g = apply(g, { type: "VOTE", seat: s, approve: false });
+    g = apply(g, { type: "ADVANCE" });
+    // 再两车都不带红方
+    g = round(g, [0, 1, 2], [true, true, true, true, true]);
+    g = round(g, [0, 1], [true, true, true, true, true]);
+    g = apply(g, { type: "ASSASSINATE", seat: 4, targetSeat: 1 });
+
+    const stats = seatStats(g);
+    // 通过的车一共 3 辆，被否的那辆不算
+    expect(stats[3]!.teamsAsRed).toBe(3);
+    expect(stats[3]!.aboardAsRed).toBe(1);
+    // 4 号也是红方，分母一样，但一次都没挤上去
+    expect(stats[4]!.teamsAsRed).toBe(3);
+    expect(stats[4]!.aboardAsRed).toBe(0);
+    // 蓝方三人上了一堆车，但这个指标跟他们无关
+    for (const seat of [0, 1, 2]) {
+      expect([stats[seat]!.teamsAsRed, stats[seat]!.aboardAsRed], `${seat} 号是蓝方`).toEqual([0, 0]);
+    }
+  });
+
   it("刺杀只算真的动手那一次，命中才计入分子", () => {
     let g = ackAll(make());
     for (const team of [[0, 1], [0, 1, 2], [0, 1]]) {
@@ -229,6 +256,23 @@ describe("累加与比率", () => {
     const a = { ...emptyStats(), games: 2, wins: 1 };
     const b = { ...emptyStats(), games: 3, wins: 2 };
     expect(addStats(a, b)).toMatchObject({ games: 5, wins: 3 });
+  });
+
+  /**
+   * 回归：新增一个指标之后，Redis 里的老档案没有那个键。
+   * 不兜底的话 `undefined + 1` = NaN，写回去变成 null，整列数字废掉 ——
+   * 而且要等到有人打完下一局才发作。
+   */
+  it("老档案里缺的字段当 0 算，不出 NaN", () => {
+    const { teamsAsRed: _a, aboardAsRed: _b, ...legacy } = emptyStats();
+    const merged = addStats(legacy as ReturnType<typeof emptyStats>, {
+      ...emptyStats(),
+      games: 1,
+      teamsAsRed: 3,
+      aboardAsRed: 1,
+    });
+    expect(Object.values(merged).every(Number.isFinite), "有字段算成了 NaN").toBe(true);
+    expect(merged).toMatchObject({ games: 1, teamsAsRed: 3, aboardAsRed: 1 });
   });
 
   it("分母为 0 时返回 null，不是 0 —— 「没数据」不该看着像「表现极差」", () => {

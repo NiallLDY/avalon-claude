@@ -40,6 +40,16 @@ export interface SeatStats {
   /** 其中那车有红方。→ 赞成失误率 */
   readonly votedApproveWithEvil: number;
 
+  /*
+   * 反过来的一对：**只统计自己是红方的局**。
+   * 蓝方那三个指标把红方的局整个排除了，红方玩得好不好总得有地方看得出来。
+   */
+
+  /** 你是红方的局里，通过了的车总数（每一车都是一次上车机会） */
+  readonly teamsAsRed: number;
+  /** 其中你自己在车上。→ 狼人上车率 */
+  readonly aboardAsRed: number;
+
   /** 当刺客并执行了刺杀的次数（每局至多 1） */
   readonly assassinated: 0 | 1;
   /** 刺中梅林 */
@@ -64,6 +74,8 @@ const ZERO: SeatStats = {
   votedRejectWithEvil: 0,
   votedApprove: 0,
   votedApproveWithEvil: 0,
+  teamsAsRed: 0,
+  aboardAsRed: 0,
   assassinated: 0,
   assassinatedHit: 0,
   asMerlin: 0,
@@ -151,6 +163,23 @@ export const statsFrom = (input: StatsInput): readonly SeatStats[] => {
       }
     }
 
+    /*
+     * 狼人上车率：**只统计自己是红方的局**里，通过的车中有你的比例。
+     *
+     * 分母是「通过了的车」而不是「所有提名」—— 被否掉的车没上路，
+     * 谁在上面都不算上过车，和带狼上车率同一套。
+     * 越高说明藏得越好：一直被挑上车，说明蓝方没把你认出来。
+     */
+    let teamsAsRed = 0;
+    let aboardAsRed = 0;
+    if (side === "RED") {
+      for (const p of proposals) {
+        if (!p.approved) continue;
+        teamsAsRed += 1;
+        if (p.team.includes(seat)) aboardAsRed += 1;
+      }
+    }
+
     // 刺杀：只算真的动了手那一次。没走到刺杀阶段就不计入分母
     const didAssassinate =
       outcome.assassinatedSeat !== null &&
@@ -182,6 +211,8 @@ export const statsFrom = (input: StatsInput): readonly SeatStats[] => {
       votedRejectWithEvil,
       votedApprove,
       votedApproveWithEvil,
+      teamsAsRed,
+      aboardAsRed,
       assassinated: didAssassinate ? 1 : 0,
       assassinatedHit: hit ? 1 : 0,
       asMerlin: merlinTested ? 1 : 0,
@@ -221,6 +252,8 @@ export const emptyStats = (): PlayerStats => ({
   votedRejectWithEvil: 0,
   votedApprove: 0,
   votedApproveWithEvil: 0,
+  teamsAsRed: 0,
+  aboardAsRed: 0,
   assassinated: 0,
   assassinatedHit: 0,
   asMerlin: 0,
@@ -230,7 +263,13 @@ export const emptyStats = (): PlayerStats => ({
 export const addStats = (a: PlayerStats, b: SeatStats | PlayerStats): PlayerStats => {
   const out = emptyStats();
   for (const key of Object.keys(out) as (keyof PlayerStats)[]) {
-    out[key] = a[key] + b[key];
+    /*
+     * `?? 0` 不是多余的：`a` 通常是 Redis 里 JSON.parse 出来的老档案，
+     * 新加一个指标之后那些档案里根本没这个键，类型上是 number，运行时是 undefined。
+     * 不兜底的话 `undefined + 1` 得到 NaN，写回 Redis 变成 null，整列数字就废了 ——
+     * 而且要等到有人打完一局才发作，部署当下看不出来。
+     */
+    out[key] = (a[key] ?? 0) + (b[key] ?? 0);
   }
   return out;
 };

@@ -26,6 +26,8 @@ interface Stats {
   votedRejectWithEvil: number;
   votedApprove: number;
   votedApproveWithEvil: number;
+  teamsAsRed: number;
+  aboardAsRed: number;
   assassinated: number;
   assassinatedHit: number;
   asMerlin: number;
@@ -66,6 +68,12 @@ const METRICS: readonly {
     label: "赞成失误率",
     of: (s) => [s.votedApproveWithEvil, s.votedApprove],
     hint: "只算你是蓝方的局：你投赞成的车里，混了红方的比例。越低越好",
+  },
+  /* 反过来的一个：只算你是红方的局 */
+  {
+    label: "狼人上车率",
+    of: (s) => [s.aboardAsRed, s.teamsAsRed],
+    hint: "只算你是红方的局：通过的车里有你的比例。越高越藏得住",
   },
   {
     label: "刺杀命中率",

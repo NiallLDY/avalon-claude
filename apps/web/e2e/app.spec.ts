@@ -651,6 +651,9 @@ test.describe("排行榜", () => {
     // 每个指标都得有口径说明
     await expect(page.getByText(/你当队长、车通过了，车上有红方的比例/)).toBeVisible();
     await expect(page.getByText(/你投反对的车里，确实有红方的比例/)).toBeVisible();
+    // 蓝方那几项和红方那项各自写明只算哪一边的局，不然两组数字没法一起读
+    await expect(page.getByText(/只算你是蓝方的局：你当队长/)).toBeVisible();
+    await expect(page.getByText(/只算你是红方的局：通过的车里有你的比例/)).toBeVisible();
     // 没有账号系统这件事要挑明
     await expect(page.getByText(/清了浏览器数据或换设备/)).toBeVisible();
 
