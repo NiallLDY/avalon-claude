@@ -6,6 +6,8 @@
  * 这样 `apps/web` 只依赖 shared，不依赖规则引擎 —— 引擎代码永远不会被打进前端包。
  */
 
+import type { RoleId } from "./roles.js";
+
 export type GameMode = "STANDARD" | "LANCELOT";
 
 export type Phase =
@@ -47,6 +49,17 @@ export interface GameSettings {
    * 房主自己掂量要不要开。
    */
   readonly spectatorsSeeRoles: boolean;
+  /**
+   * 互认的坏人连队友的**具体角色**一起知道，而不只是「他是红方」。
+   *
+   * 只作用于本来就互相认得的那几个人 —— 判据是角色表上的 `visibleToEvil`。
+   * 奥伯伦两边都不沾：队友名单里本来就没有他（`visibleToEvil: false`），
+   * 他自己也拿不到任何视野（`seesEvil: false`），开了这个开关也一样。
+   *
+   * 默认关。开了之后红方开局就知道刺客是谁、莫德雷德是谁，
+   * 配合默契高不少，也少了一层红方内部的信息差。
+   */
+  readonly evilKnowRoles: boolean;
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
@@ -59,6 +72,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   hideLoyaltyFlipResult: false,
   lancelotsKnowEachOther: false,
   spectatorsSeeRoles: false,
+  evilKnowRoles: false,
 };
 
 /**
@@ -80,6 +94,14 @@ export interface Vision {
    * 不是「他是红方」。
    */
   readonly counterpartSeat: number | null;
+  /**
+   * 队友的具体角色。只在房主开了「坏人互认身份」时才有值。
+   *
+   * 座位一定是 `evilSeats` 的子集 —— 也就是说奥伯伦不可能出现在这里，
+   * 他压根就不在队友名单上。梅林、派西维尔的视野里这项恒为空：
+   * 他们看到的红方只是「红方」，给出角色就等于把整局送掉。
+   */
+  readonly evilRoles: readonly { readonly seat: number; readonly roleId: RoleId }[];
 }
 
 export type WinReason =

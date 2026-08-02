@@ -217,6 +217,7 @@ describe("computeVision · 无视野角色", () => {
           merlinCandidates: [],
           lancelotSeats: [],
           counterpartSeat: null,
+          evilRoles: [],
         });
       }
     });
@@ -281,6 +282,81 @@ describe("computeVision · 兰斯洛特互认（变体 #3）", () => {
       const vision = computeVision(roles, seededRng([1]), { lancelotsKnowEachOther: true });
       for (const seat of roles.keys()) {
         expect(vision[seat]!.counterpartSeat, `${label} @${seat}`).toBeNull();
+      }
+    });
+  });
+});
+
+/**
+ * 「坏人互认身份」：本来就互认的那几个人连队友的具体角色一起知道。
+ *
+ * 最要紧的是**奥伯伦两头都不沾** —— 他既不在任何人的队友名单上，
+ * 自己也拿不到任何情报。开关只是让已有的那份名单标上角色，
+ * 不该把不互认的人拉进来。
+ */
+describe("computeVision · 坏人互认身份", () => {
+  const ON = { evilKnowRoles: true } as const;
+
+  it("开了之后，互认的坏人拿到队友的具体角色，且和队友名单完全对得上", () => {
+    forEveryDeal(({ roles, label }) => {
+      const vision = computeVision(roles, seededRng([1]), ON);
+      for (const seat of roles.keys()) {
+        const meta = ROLES[roles[seat]!];
+        // 只有「认得队友」的坏人才有这份名单。梅林也有 evilSeats，但那是另一回事
+        if (!(meta.side === "RED" && meta.seesEvil)) continue;
+        const v = vision[seat]!;
+        const where = `${label} @${seat} ${roles[seat]}`;
+        // 座位集合必须和 evilSeats 一模一样：不多给也不少给
+        expect(v.evilRoles.map((r) => r.seat).sort((a, b) => a - b), where).toEqual(
+          [...v.evilSeats].sort((a, b) => a - b),
+        );
+        // 角色也得是真的角色，不能张冠李戴
+        for (const { seat: s, roleId } of v.evilRoles) {
+          expect(roleId, `${where} → @${s}`).toBe(roles[s]);
+        }
+      }
+    });
+  });
+
+  it("奥伯伦两头都不沾：自己拿不到，也不出现在别人的名单里", () => {
+    forEveryDeal(({ roles, label }) => {
+      const oberon = roles.indexOf("OBERON");
+      if (oberon < 0) return;
+      const vision = computeVision(roles, seededRng([1]), ON);
+
+      expect(vision[oberon]!.evilRoles, `${label} 奥伯伦@${oberon} 不该知道任何人`).toEqual([]);
+      expect(vision[oberon]!.evilSeats, `${label} 奥伯伦@${oberon}`).toEqual([]);
+      for (const seat of roles.keys()) {
+        expect(
+          vision[seat]!.evilRoles.some((r) => r.seat === oberon),
+          `${label} @${seat} 的名单里出现了奥伯伦`,
+        ).toBe(false);
+      }
+    });
+  });
+
+  it("蓝方一个字都不多知道 —— 梅林看到的红方仍然只是「红方」", () => {
+    forEveryDeal(({ roles, label }) => {
+      const vision = computeVision(roles, seededRng([1]), ON);
+      for (const seat of roles.keys()) {
+        if (ROLES[roles[seat]!].side === "RED") continue;
+        expect(vision[seat]!.evilRoles, `${label} @${seat} ${roles[seat]}`).toEqual([]);
+      }
+    });
+  });
+
+  it("关着的时候谁都拿不到角色，而且视野的其余部分和开着时完全一样", () => {
+    forEveryDeal(({ roles, label }) => {
+      const off = computeVision(roles, seededRng([1]), { evilKnowRoles: false });
+      const on = computeVision(roles, seededRng([1]), ON);
+      for (const seat of roles.keys()) {
+        expect(off[seat]!.evilRoles, `${label} @${seat}`).toEqual([]);
+        // 开关只加 evilRoles 这一项，别的一个字都不许动
+        expect({ ...on[seat]!, evilRoles: [] }, `${label} @${seat}`).toEqual(off[seat]);
+      }
+      // 不传 settings 也一样是关着的
+      for (const v of computeVision(roles, seededRng([1]))) {
+        expect(v.evilRoles, label).toEqual([]);
       }
     });
   });

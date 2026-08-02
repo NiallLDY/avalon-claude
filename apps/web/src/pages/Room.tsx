@@ -335,6 +335,13 @@ export const Room = () => {
               onChange={(spectatorsSeeRoles) => patch({ spectatorsSeeRoles })}
             />
             <Toggle
+              label="坏人互认身份"
+              hint="本来互认的坏人连队友具体角色一起知道。奥伯伦不受影响，仍然谁都不认识"
+              checked={s.evilKnowRoles}
+              disabled={!host}
+              onChange={(evilKnowRoles) => patch({ evilKnowRoles })}
+            />
+            <Toggle
               label="提前刺杀"
               hint="打完 2 次任务后，刺客可以随时动手；刺错人红方当场输"
               checked={s.earlyAssassination}

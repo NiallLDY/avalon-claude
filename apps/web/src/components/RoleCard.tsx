@@ -85,6 +85,7 @@ export const RoleCard = ({
                  * 只是本人已经看到的信息，标出来不多泄漏什么。
                  */
                 data-my-side={meta.side}
+                data-role={me.roleId}
                 className={`font-display text-2xl leading-none
                   ${meta.side === "RED" ? "text-red" : "text-blue"}`}
               >
@@ -127,7 +128,15 @@ export const RoleCard = ({
                   seats={me.vision.evilSeats}
                   tone="red"
                   showNick={false}
-                  markOf={(s) => (me.vision.lancelotSeats.includes(s) ? "兰" : undefined)}
+                  /*
+                    开了「坏人互认身份」就直接标出具体角色，盖过原来的「兰」——
+                    知道他是红兰斯洛特，就没必要再单独挂一个兰字。
+                  */
+                  markOf={(s) => {
+                    const known = me.vision.evilRoles.find((r) => r.seat === s);
+                    if (known) return ROLES[known.roleId].name;
+                    return me.vision.lancelotSeats.includes(s) ? "兰" : undefined;
+                  }}
                 />
               </div>
             ) : null}

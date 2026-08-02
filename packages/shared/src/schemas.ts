@@ -61,6 +61,7 @@ export const gameSettingsSchema = z.object({
   hideLoyaltyFlipResult: z.boolean(),
   lancelotsKnowEachOther: z.boolean(),
   spectatorsSeeRoles: z.boolean(),
+  evilKnowRoles: z.boolean(),
 }) satisfies z.ZodType<GameSettings>;
 
 export const roomOptionsSchema = z.object({

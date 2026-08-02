@@ -3,7 +3,8 @@
  *
  * 三条不可违反的性质（均有单测断言）：
  *   1. 梅林的视野里**没有莫德雷德**
- *   2. 奥伯伦**看不到任何人**，也**不出现在任何红方队友的视野里**
+ *   2. 奥伯伦**看不到任何人**，也**不出现在任何红方队友的视野里** ——
+ *      开了「坏人互认身份」也一样，他两头都不沾
  *   3. 红兰斯洛特**没有视野**；他出现在梅林视野里时**不带兰斯洛特标记**，
  *      出现在红方队友视野里时**带标记**
  *      —— 唯一例外是开了官方变体 #3「兰斯洛特互认」，此时两位兰斯洛特
@@ -20,6 +21,7 @@ const EMPTY_VISION: Vision = {
   merlinCandidates: [],
   lancelotSeats: [],
   counterpartSeat: null,
+  evilRoles: [],
 };
 
 /** 座位 -> 是否红方（按开局角色，不看当前阵营） */
@@ -29,12 +31,13 @@ const evilSeatsOf = (roles: readonly RoleId[]): number[] =>
 /**
  * 计算全体玩家的开局视野。
  * @param rng 只用于打乱派西维尔看到的两人顺序 —— 顺序本身会泄漏信息
- * @param settings 只读 `lancelotsKnowEachOther`（官方变体 #3）
+ * @param settings 只读 `lancelotsKnowEachOther`（官方变体 #3）与 `evilKnowRoles`
  */
 export const computeVision = (
   roles: readonly RoleId[],
   rng: Rng,
-  settings?: Pick<GameSettings, "lancelotsKnowEachOther">,
+  // Partial：两个开关互不相干，调用方（和单测）只关心一个时不该被迫两个都写
+  settings?: Partial<Pick<GameSettings, "lancelotsKnowEachOther" | "evilKnowRoles">>,
 ): readonly Vision[] => {
   const allEvil = evilSeatsOf(roles);
 
@@ -82,6 +85,14 @@ export const computeVision = (
         // 队友视角能认出谁是兰斯洛特（梅林视角不行）
         lancelotSeats: teammates.filter((s) => ROLES[roles[s]!].isLancelot),
         counterpartSeat: null,
+        /*
+         * 开了「坏人互认身份」才给具体角色，而且只给 teammates 里的人。
+         * 名单是 seenByEvil 过滤出来的，奥伯伦本来就不在里面 ——
+         * 不用在这里再补一道「排除奥伯伦」，那样反而多一处会漏改的地方。
+         */
+        evilRoles: settings?.evilKnowRoles
+          ? teammates.map((s) => ({ seat: s, roleId: roles[s]! }))
+          : [],
       };
     }
 

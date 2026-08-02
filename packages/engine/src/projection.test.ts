@@ -27,6 +27,7 @@ const settings = (over: Partial<GameSettings> = {}): GameSettings => ({
   hideLoyaltyFlipResult: false,
   lancelotsKnowEachOther: false,
   spectatorsSeeRoles: false,
+  evilKnowRoles: false,
   ...over,
 });
 
@@ -39,7 +40,12 @@ const makeGame = (roles: readonly RoleId[], over: Partial<GameSettings> = {}): G
     ...base,
     roles: [...roles],
     sides: roles.map((r) => ROLES[r].side),
-    vision: computeVision(roles, seededRng([0])),
+    /*
+     * 必须把 settings 传进去 —— createGame 在生产里就是这么调的。
+     * 漏了的话，凡是影响视野的开关（兰斯洛特互认、坏人互认身份）在这份
+     * 夹具里全都是关着的，对应的断言就变成了空跑。
+     */
+    vision: computeVision(roles, seededRng([0]), base.settings),
   };
 };
 
@@ -346,6 +352,65 @@ describe("自己的视野", () => {
       );
       expect(view.me!.canAssassinate, label).toBe(viewer === assassin);
     });
+  });
+});
+
+/**
+ * 「坏人互认身份」在裁剪这一层的样子。
+ *
+ * 视野是塞在 `me` 里发的，而上面那条「不出现任何角色名」的断言**排除了 `me`** ——
+ * 所以这个开关必须在这里单独钉一遍：蓝方（尤其是梅林）一个角色名都不该多拿到，
+ * 奥伯伦两头不沾，红方拿到的也只能是真队友。
+ */
+describe("坏人互认身份 · 裁剪", () => {
+  // SEVEN_STD：0 梅林 1 派西 2/3 忠臣 4 莫甘娜 5 刺客 6 奥伯伦
+  const states = playThrough(makeGame(SEVEN_STD, { evilKnowRoles: true }), false);
+  const MORGANA = 4;
+  const ASSASSIN = 5;
+  const OBERON = 6;
+
+  it("红方队友拿到彼此的具体角色，奥伯伦不在名单里", () => {
+    for (const [i, state] of states.entries()) {
+      if (state.phase === "GAME_OVER") continue;
+      for (const [viewer, expected] of [
+        [MORGANA, [{ seat: ASSASSIN, roleId: "ASSASSIN" }]],
+        [ASSASSIN, [{ seat: MORGANA, roleId: "MORGANA" }]],
+      ] as const) {
+        expect(projectFor(state, viewer).me!.vision.evilRoles, `#${i} @${viewer}`).toEqual(expected);
+      }
+    }
+  });
+
+  it("奥伯伦什么都拿不到", () => {
+    for (const [i, state] of states.entries()) {
+      if (state.phase === "GAME_OVER") continue;
+      const me = projectFor(state, OBERON).me!;
+      expect(me.vision.evilRoles, `#${i}`).toEqual([]);
+      expect(me.vision.evilSeats, `#${i}`).toEqual([]);
+    }
+  });
+
+  it("蓝方视图里除了自己的角色，仍然一个角色名都没有", () => {
+    for (const [i, state] of states.entries()) {
+      if (state.phase === "GAME_OVER") continue;
+      for (const viewer of [0, 1, 2, 3]) {
+        const view = projectFor(state, viewer);
+        expect(view.me!.vision.evilRoles, `#${i} @${viewer}`).toEqual([]);
+        // 连 me 一起扫：唯一允许出现的就是他自己那张牌
+        expect(rolesMentionedIn(JSON.stringify(view)), `#${i} @${viewer}`).toEqual([
+          state.roles[viewer],
+        ]);
+      }
+    }
+  });
+
+  it("关着的时候红方也只知道「他是红方」", () => {
+    for (const [i, state] of playThrough(makeGame(SEVEN_STD), false).entries()) {
+      if (state.phase === "GAME_OVER") continue;
+      for (const viewer of [MORGANA, ASSASSIN]) {
+        expect(projectFor(state, viewer).me!.vision.evilRoles, `#${i} @${viewer}`).toEqual([]);
+      }
+    }
   });
 });
 

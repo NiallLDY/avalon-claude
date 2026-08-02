@@ -27,6 +27,7 @@ const settings = (over: Partial<GameSettings> = {}): GameSettings => ({
   hideLoyaltyFlipResult: false,
   lancelotsKnowEachOther: false,
   spectatorsSeeRoles: false,
+  evilKnowRoles: false,
   ...over,
 });
 

@@ -21,7 +21,7 @@ const make = (roles: readonly RoleId[] = FIVE): GameState => {
         mode: "STANDARD", ladyOfTheLake: false, earlyAssassination: false,
         leaderRotation: "CLOCKWISE", rejectCounting: "PER_ROUND",
         loyaltyFlipTiming: "NORMAL", hideLoyaltyFlipResult: false,
-        lancelotsKnowEachOther: false, spectatorsSeeRoles: false,
+        lancelotsKnowEachOther: false, spectatorsSeeRoles: false, evilKnowRoles: false,
       },
       firstLeaderSeat: 0,
     },

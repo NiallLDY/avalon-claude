@@ -1017,6 +1017,73 @@ test.describe("兰斯洛特互认", () => {
   });
 });
 
+test.describe("坏人互认身份", () => {
+  /**
+   * 7 人标准局固定有奥伯伦（梅林、派西、忠臣×2、莫甘娜、刺客、奥伯伦）。
+   * 要验的是两件事：互认的坏人真看到了队友的角色名，
+   * **而奥伯伦一个人都不认识、也没被任何人认出来**。
+   */
+  test("开了之后互认的坏人看到队友角色，奥伯伦两头都不沾", async ({ browser }) => {
+    test.setTimeout(120_000);
+    const ctxs = await Promise.all(
+      Array.from({ length: 7 }, () => browser.newContext({ locale: "zh-CN" })),
+    );
+    const pages = await Promise.all(ctxs.map((c) => c.newPage()));
+    for (const [i, p] of pages.entries()) await openApp(p, `坏${i + 1}`);
+
+    const host = pages[0]!;
+    const code = await createRoom(host, "互认测试");
+    await host.getByRole("button", { name: "设置" }).click();
+    const sheet = host.getByRole("dialog");
+    await sheet.getByRole("button", { name: "7", exact: true }).click();
+    await sheet.getByRole("button", { name: /坏人互认身份/ }).click();
+    await host.keyboard.press("Escape");
+    await expect(host.getByRole("dialog")).toHaveCount(0);
+
+    await sit(host, 0);
+    for (const [i, p] of pages.slice(1).entries()) {
+      await p.getByPlaceholder("房间码").fill(code);
+      await p.getByRole("button", { name: "进", exact: true }).click();
+      await sit(p, i + 1);
+    }
+    for (const p of pages) await p.getByRole("button", { name: "准备" }).click();
+    await host.getByRole("button", { name: "开始游戏" }).click();
+
+    // 翻牌，逐人记下「我是谁」和「我看到的红方那一块写了什么」
+    const cards: { seat: number; mine: string; evilBlock: string }[] = [];
+    for (const [i, p] of pages.entries()) {
+      const dialog = p.getByRole("dialog");
+      await dialog.getByRole("button", { name: /点击查看身份/ }).click();
+      const evil = dialog.locator("div", { hasText: "这些人是红方" });
+      cards.push({
+        seat: i,
+        // 自己的身份只能读这一个元素 —— 视野区会写出别人的角色名
+        mine: (await dialog.locator("[data-my-side]").first().getAttribute("data-role")) ?? "",
+        evilBlock: (await evil.count()) ? await evil.last().innerText() : "",
+      });
+      await p.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+    }
+
+    const oberon = cards.find((c) => c.mine === "OBERON");
+    expect(oberon, "7 人标准局该有奥伯伦").toBeTruthy();
+    // 奥伯伦谁都不认识：红方那一块整个不出现
+    expect(oberon!.evilBlock, "奥伯伦不该看到任何队友").toBe("");
+
+    // 莫甘娜和刺客互相认得，且看到的是**角色名**而不只是号码
+    const morgana = cards.find((c) => c.mine === "MORGANA")!;
+    const assassin = cards.find((c) => c.mine === "ASSASSIN")!;
+    expect(morgana.evilBlock).toContain("刺客");
+    expect(assassin.evilBlock).toContain("莫甘娜");
+    // 谁都不该看到奥伯伦 —— 连他的号码都不该出现在红方名单里
+    for (const c of cards) {
+      expect(c.evilBlock, `${c.seat + 1} 号看到了奥伯伦`).not.toContain("奥伯伦");
+    }
+
+    for (const c of ctxs) await c.close();
+  });
+});
+
 test.describe("观战者看身份", () => {
   /**
    * 房主开关，默认关。这条既验观战者真能看到，
