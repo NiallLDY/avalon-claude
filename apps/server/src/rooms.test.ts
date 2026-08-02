@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS, type Avatar } from "@avalon/shared";
+import { roomIdSchema } from "@avalon/shared/schemas";
 import { config } from "./config.js";
 import {
   abortGame,
@@ -61,6 +62,30 @@ const seated = (n: number, ready = true): Room => {
   if (ready) for (let i = 0; i < n; i++) setReady(r, `p${i}`, true, T0);
   return r;
 };
+
+describe("房间码", () => {
+  it("是 6 位纯数字，且过得了协议校验", () => {
+    // 摇够多次才看得出字母有没有混进来 —— 一次只有 6 个字符
+    for (let i = 0; i < 500; i++) {
+      const id = room().id;
+      expect(id, "房间码不是 6 位纯数字").toMatch(/^\d{6}$/);
+      expect(roomIdSchema.safeParse(id).success, `${id} 过不了 roomIdSchema`).toBe(true);
+    }
+  });
+
+  it("撞码就重摇", () => {
+    const taken = createRoom({
+      name: "测试房", visibility: "PUBLIC", allowSpectators: true,
+      hostId: "p0", ownerIp: "1.2.3.4", now: T0, existingIds: new Set(),
+    }).id;
+    const next = createRoom({
+      name: "测试房", visibility: "PUBLIC", allowSpectators: true,
+      hostId: "p1", ownerIp: "1.2.3.4", now: T0, existingIds: new Set([taken]),
+    });
+    expect(next.id).not.toBe(taken);
+  });
+
+});
 
 describe("入座与离座", () => {
   it("坐到哪个位子由自己挑，不是按点击先后分配", () => {

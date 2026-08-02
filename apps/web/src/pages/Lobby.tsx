@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { ROOM_NAME_MAX, sanitizeText } from "@avalon/shared";
+import { ROOM_CODE_LENGTH, ROOM_NAME_MAX, sanitizeText } from "@avalon/shared";
 import { ProfileEditor } from "../components/Profile.js";
 import { History } from "./History.js";
 import { Button, Sheet, Toggle } from "../components/ui.js";
@@ -87,14 +87,16 @@ export const Lobby = () => {
         />
         <input
           value={code}
-          onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 6))}
+          /* 房间码是纯数字：非数字直接丢掉，粘贴进来带空格或短横也能自己清干净 */
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, ROOM_CODE_LENGTH))}
           placeholder="房间码"
-          inputMode="text"
-          autoCapitalize="characters"
+          /* numeric 而不是 text：手机上直接弹数字键盘，不用先切一次 */
+          inputMode="numeric"
+          autoComplete="off"
           className="w-24 rounded-lg bg-surface px-3 py-2.5 text-center text-sm tracking-widest
             outline-none focus:ring-1 focus:ring-gold/60"
         />
-        <Button tone="gold" disabled={code.length !== 6} onClick={() => joinRoom(code)}>
+        <Button tone="gold" disabled={code.length !== ROOM_CODE_LENGTH} onClick={() => joinRoom(code)}>
           进
         </Button>
       </div>

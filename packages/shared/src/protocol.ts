@@ -26,9 +26,16 @@ export const sanitizeText = (raw: string, maxLength: number): string =>
 export const NICK_MAX = 12;
 export const ROOM_NAME_MAX = 20;
 
-/** 房间码字母表，已去掉形近的 0/O/1/I，方便口头念给同桌的人 */
-export const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-export const ROOM_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{6}$/;
+/**
+ * 房间码：**6 位纯数字**。
+ *
+ * 线下面对面玩，房间码是喊出来的、在手机上敲进去的 ——
+ * 数字念起来没有「B 还是 D」的歧义，输入时也能直接调出数字键盘。
+ * 混合字母表原本还要专门剔掉形近的 0/O/1/I，纯数字连这个问题都不存在。
+ */
+export const ROOM_CODE_ALPHABET = "0123456789";
+export const ROOM_CODE_LENGTH = 6;
+export const ROOM_CODE_PATTERN = /^\d{6}$/;
 
 // ──────────────────────────── 身份 ────────────────────────────
 

@@ -3,12 +3,15 @@
  */
 
 import { randomInt, randomUUID, randomBytes, timingSafeEqual } from "node:crypto";
-import { ROOM_CODE_ALPHABET } from "@avalon/shared";
+import { ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from "@avalon/shared";
 import type { Rng } from "@avalon/engine";
 
-/** 6 位房间码。字母表已去掉形近的 0/O/1/I，方便口头念给同桌的人 */
+/** 6 位纯数字房间码，念给同桌的人听没有歧义。取值范围见 ROOM_CODE_ALPHABET 那条注释 */
 export const newRoomCode = (): string =>
-  Array.from({ length: 6 }, () => ROOM_CODE_ALPHABET[randomInt(ROOM_CODE_ALPHABET.length)]).join("");
+  Array.from(
+    { length: ROOM_CODE_LENGTH },
+    () => ROOM_CODE_ALPHABET[randomInt(ROOM_CODE_ALPHABET.length)],
+  ).join("");
 
 export const newPlayerId = (): string => randomUUID();
 

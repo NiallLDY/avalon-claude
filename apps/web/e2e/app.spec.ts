@@ -31,9 +31,9 @@ const createRoom = async (page: Page, name = "测试房") => {
   await page.getByRole("button", { name: "开房间" }).click();
   await page.getByPlaceholder(/的房间$/).fill(name);
   await page.getByRole("button", { name: "创建" }).click();
-  // 进房后头部会显示 6 位房间码
+  // 进房后头部会显示 6 位纯数字房间码
   const code = page.locator("p.font-display").first();
-  await expect(code).toHaveText(/^[A-HJ-NP-Z2-9]{6}$/);
+  await expect(code).toHaveText(/^\d{6}$/);
   return (await code.textContent())!.trim();
 };
 
