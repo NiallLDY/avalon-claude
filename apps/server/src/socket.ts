@@ -117,6 +117,7 @@ export const attachSocket = (
       if (!result?.ok) return;
       pushRoom(room);
       pushEvents(room, result.events);
+      persistFinishedGame(room);
     }, config.autoAdvanceMs);
     timer.unref();
     autoTimers.set(room.id, timer);
@@ -129,6 +130,29 @@ export const attachSocket = (
 
   const pushLobby = (): void => {
     io.to("lobby").emit("room:list", { rooms: registry.list() });
+  };
+
+  /**
+   * 终局持久化必须跟着 `GAME_OVER`，不能只跟着玩家主动发来的动作。
+   *
+   * 任务结果和揭票结果都可能由上面的定时器自动推进：三次任务失败、连续
+   * 五次流局正是在那条路径判胜。以前自动推进只推了终局画面，却绕过了战报
+   * 和对局归档；房主手动点「立即继续」才会落盘。
+   */
+  const persistFinishedGame = (room: Room): void => {
+    if (room.game?.phase !== "GAME_OVER") return;
+
+    // 连 room 一起存：战报里全是座位号，没有名单就只剩一串数字，复盘时对不上人。
+    // 存的是观战者视角（playerId 传空串），里面本来就只有公开信息
+    const snapshot = stateFor(room, "");
+    void store.saveReport(room.id, {
+      finishedAt: now(),
+      room: snapshot.room,
+      game: snapshot.game,
+    });
+    // 归档进公开战绩与排行榜。它读全员真实身份，只能在终局之后调用。
+    void records.archive(room, now());
+    pushLobby();
   };
 
   const reply = (socket: AppSocket, result: RoomResult<unknown>, room?: Room): void => {
@@ -436,21 +460,7 @@ export const attachSocket = (
 
       pushRoom(room);
       pushEvents(room, outcome.value.events);
-
-      if (room.game?.phase === "GAME_OVER") {
-        // 连 room 一起存：战报里全是座位号，没有名单就只剩一串数字，复盘时对不上人。
-        // 存的是观战者视角（playerId 传空串），里面本来就只有公开信息
-        const snapshot = stateFor(room, "");
-        void store.saveReport(room.id, {
-          finishedAt: now(),
-          room: snapshot.room,
-          game: snapshot.game,
-        });
-        // 归档进公开战绩与排行榜。**只在这里调** ——
-        // 它读全员真实身份，放在任何还没结束的分支里都是泄漏
-        void records.archive(room, now());
-        pushLobby();
-      }
+      persistFinishedGame(room);
     });
 
     /*

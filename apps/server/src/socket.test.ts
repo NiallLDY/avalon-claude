@@ -18,22 +18,29 @@ import { createRegistry, type Registry } from "./registry.js";
 import type { Store } from "./store.js";
 
 /** Redis 桩。对局不依赖 Redis，快照写不写都不影响正确性 */
+const savedReportRooms: string[] = [];
 const fakeStore = (): Store =>
   ({
     save: () => undefined,
     saveNow: async () => undefined,
     remove: async () => undefined,
     restoreAll: async () => [],
-    saveReport: async () => undefined,
+    saveReport: async (roomId: string) => {
+      savedReportRooms.push(roomId);
+    },
     loadReport: async () => null,
     close: async () => undefined,
     redis: null,
   }) as unknown as Store;
 
-/** 战绩归档桩。归档失败不该影响对局，测试里也不需要真的写 */
+/** 战绩归档桩。归档失败不该影响对局，测试里只记下调用 */
+const archivedRooms: string[] = [];
 const fakeRecords = () =>
   ({
-    archive: async () => null,
+    archive: async (room: { id: string }) => {
+      archivedRooms.push(room.id);
+      return null;
+    },
     leaderboard: async () => [],
     recentMatches: async () => [],
     match: async () => null,
@@ -108,8 +115,9 @@ const waitFor = async (
   members: readonly Client[],
   predicate: (c: Client) => boolean,
   label: string,
+  timeoutMs = 3000,
 ): Promise<void> => {
-  const deadline = Date.now() + 3000;
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (members.every(predicate)) return;
     await new Promise((r) => setTimeout(r, 10));
@@ -122,6 +130,8 @@ const act = (c: Client, action: ClientAction): void => {
 };
 
 beforeEach(async () => {
+  savedReportRooms.length = 0;
+  archivedRooms.length = 0;
   http = createServer();
   io = new IOServer(http, { path: "/ws", maxHttpBufferSize: 4096 });
   registry = createRegistry();
@@ -397,6 +407,58 @@ describe("一整局", () => {
     members[0]!.socket.emit("game:start", {});
     await waitFor(members, (c) => c.state?.game?.phase === "ROLE_REVEAL", "开下一局");
     for (const c of members) expect(c.errors).toEqual([]);
+  }, 20_000);
+
+  it("三次任务失败由定时器推进到终局时也会保存战报并归档", async () => {
+    const { roomId, members } = await setupRoom(5);
+    const host = members[0]!;
+
+    host.socket.emit("game:start", {});
+    await waitFor(members, (c) => c.state?.game?.phase === "ROLE_REVEAL", "发牌");
+    for (const c of members) act(c, { type: "ACK_ROLE" });
+    await waitFor(members, (c) => c.state?.game?.phase === "TEAM_BUILD", "组队");
+
+    const evil = members.find((c) => c.state!.game!.me!.side === "RED")!;
+    const evilSeat = evil.state!.game!.me!.seat;
+
+    const failMission = async (manualAdvance: boolean): Promise<void> => {
+      const leaderSeat = host.state!.game!.leaderSeat;
+      const leader = members[leaderSeat]!;
+      const size = leader.state!.game!.teamSize;
+      const team = [
+        evilSeat,
+        ...members.map((_, seat) => seat).filter((seat) => seat !== evilSeat),
+      ].slice(0, size);
+
+      act(leader, { type: "PROPOSE_TEAM", team, speakDirection: "CW" });
+      await waitFor(members, (c) => c.state?.game?.phase === "VOTE", "投票");
+      for (const c of members) act(c, { type: "VOTE", approve: true });
+      await waitFor(members, (c) => c.state?.game?.phase === "VOTE_RESULT", "揭票");
+
+      act(host, { type: "ADVANCE" });
+      await waitFor(members, (c) => c.state?.game?.phase === "MISSION", "执行任务");
+      for (const seat of team) {
+        act(members[seat]!, { type: "PLAY_CARD", success: seat !== evilSeat });
+      }
+      await waitFor(members, (c) => c.state?.game?.phase === "MISSION_RESULT", "任务失败");
+
+      if (manualAdvance) act(host, { type: "ADVANCE" });
+    };
+
+    // 前两轮手动推进，最后一轮故意等 6 秒定时器判胜，复现漏归档路径。
+    await failMission(true);
+    await waitFor(members, (c) => c.state?.game?.phase === "TEAM_BUILD", "第 2 轮");
+    await failMission(true);
+    await waitFor(members, (c) => c.state?.game?.phase === "TEAM_BUILD", "第 3 轮");
+    await failMission(false);
+
+    await waitFor(members, (c) => c.state?.game?.phase === "GAME_OVER", "自动终局", 9000);
+    expect(host.state!.game!.outcome).toMatchObject({
+      winner: "RED",
+      reason: "MISSIONS_FAILED",
+    });
+    expect(savedReportRooms).toEqual([roomId]);
+    expect(archivedRooms).toEqual([roomId]);
   }, 20_000);
 });
 
