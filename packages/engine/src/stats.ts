@@ -21,6 +21,11 @@ export interface SeatStats {
   readonly asRed: 0 | 1;
   readonly redWins: 0 | 1;
 
+  /*
+   * 下面六个是「判断力」指标，**只统计自己是蓝方的局**（见 statsFrom 里的说明）。
+   * 红方那几局连分母都不进。
+   */
+
   /** 当队长且车通过的次数 */
   readonly leaderApproved: number;
   /** 其中车上有红方的次数。→ 带狼上车率 */
@@ -115,7 +120,19 @@ export const statsFrom = (input: StatsInput): readonly SeatStats[] => {
     let votedApprove = 0;
     let votedApproveWithEvil = 0;
 
-    for (const p of proposals) {
+    /*
+     * 「带狼上车率 / 反对准确率 / 赞成失误率」量的是**在不知道谁是狼的前提下判断得准不准**，
+     * 所以只统计自己是蓝方的局 —— 红方那几局连分母都不进。
+     *
+     * 自己就是狼的时候这三个数一个都读不出信息：
+     *   - 带狼上车是**打算好的**，车上有同伙才是正常发挥；
+     *   - 投赞成给有狼的车不是失误，是本职工作；
+     *   - 投反对给干净的车也不叫「准」，是搅局。
+     * 混在一起算，红方玩得越好数字越难看，排行榜上就成了「谁红牌摸得少谁排前面」。
+     *
+     * 兰斯洛特按终局阵营算，和 teamHasEvil 同一套口径。
+     */
+    for (const p of side === "BLUE" ? proposals : []) {
       const evilAboard = teamHasEvil(p.team, sides);
 
       // 带狼上车率只看**通过的**车 —— 被否决的车没上路，不该算在头上

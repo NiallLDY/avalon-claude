@@ -51,20 +51,21 @@ const METRICS: readonly {
   { label: "总胜率", of: (s) => [s.wins, s.games], hint: "赢的局 / 总局数" },
   { label: "蓝方胜率", of: (s) => [s.blueWins, s.asBlue], hint: "以终局阵营算" },
   { label: "红方胜率", of: (s) => [s.redWins, s.asRed], hint: "以终局阵营算" },
+  /* 下面三个只算你是蓝方的局 —— 当红方时带狼上车是打算好的，算进去没意义 */
   {
     label: "带狼上车率",
     of: (s) => [s.leaderApprovedWithEvil, s.leaderApproved],
-    hint: "你当队长、车通过了，车上有红方的比例。越低越会组队",
+    hint: "只算你是蓝方的局：你当队长、车通过了，车上有红方的比例。越低越会组队",
   },
   {
     label: "反对准确率",
     of: (s) => [s.votedRejectWithEvil, s.votedReject],
-    hint: "你投反对的车里，确实有红方的比例。越高越准",
+    hint: "只算你是蓝方的局：你投反对的车里，确实有红方的比例。越高越准",
   },
   {
     label: "赞成失误率",
     of: (s) => [s.votedApproveWithEvil, s.votedApprove],
-    hint: "你投赞成的车里，混了红方的比例。越低越好",
+    hint: "只算你是蓝方的局：你投赞成的车里，混了红方的比例。越低越好",
   },
   {
     label: "刺杀命中率",

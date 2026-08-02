@@ -91,6 +91,50 @@ describe("seatStats", () => {
     expect(stats[1]!.votedApproveWithEvil).toBe(1);
   });
 
+  /**
+   * 口径：三个「判断力」指标只统计自己是蓝方的局。
+   *
+   * 自己就是狼的时候，带狼上车是打算好的、给有狼的车投赞成是本职工作 ——
+   * 混进去算，红方玩得越好数字越难看。红方那几局连分母都不进。
+   */
+  it("红方的组队与投票不进判断力指标，一个都不算", () => {
+    let g = ackAll(make());
+    // 0 号带干净的车过第一轮，队长顺时针挪到 1 号
+    g = round(g, [0, 1], [true, true, true, true, true]);
+
+    // 1 号、2 号的车连否两次，把队长挪到 3 号（莫甘娜）。红方两人都投了反对
+    for (const seat of [1, 2]) {
+      g = apply(g, { type: "PROPOSE_TEAM", seat, team: [0, 1, 2], speakDirection: null });
+      for (const [s] of g.roles.entries()) g = apply(g, { type: "VOTE", seat: s, approve: false });
+      g = apply(g, { type: "ADVANCE" });
+    }
+    expect(g.leaderSeat).toBe(3);
+
+    // 3 号当队长，把自己（红）塞进车里，全票通过
+    g = round(g, [0, 1, 3], [true, true, true, true, true]);
+    g = round(g, [0, 1], [true, true, true, true, true]);
+    g = apply(g, { type: "ASSASSINATE", seat: 4, targetSeat: 1 });
+
+    const stats = seatStats(g);
+    for (const seat of [3, 4]) {
+      const s = stats[seat]!;
+      expect(
+        [
+          s.leaderApproved, s.leaderApprovedWithEvil,
+          s.votedReject, s.votedRejectWithEvil,
+          s.votedApprove, s.votedApproveWithEvil,
+        ],
+        `${seat} 号是红方，判断力指标应该连分母都不进`,
+      ).toEqual([0, 0, 0, 0, 0, 0]);
+    }
+
+    // 对照：同一局里蓝方照常统计，别让上面那组断言是因为「谁都没算」才过的
+    expect(stats[0]!.leaderApproved).toBe(1);
+    expect(stats[1]!.votedApprove).toBe(3);
+    expect(stats[1]!.votedApproveWithEvil).toBe(1); // 只有带上 3 号那一车有狼
+    expect(stats[2]!.votedReject).toBe(2);
+  });
+
   it("刺杀只算真的动手那一次，命中才计入分子", () => {
     let g = ackAll(make());
     for (const team of [[0, 1], [0, 1, 2], [0, 1]]) {
