@@ -331,6 +331,9 @@ Motion 那边是 `<MotionConfig reducedMotion="user">` —— 媒体查询管不
 - 方案：`@dicebear/core` + `@dicebear/collection`，前端本地生成 SVG，**零网络请求**。
   - 存储只需 `{ seed, options }`（几十字节），不存图片。
   - "随机头像"= 换 seed；"自定义"= 暴露发型/眼睛/嘴型/眼镜/胡须/肤色/背景色选择器。
+- 取材范围收窄在 `apps/web/src/lib/avatar.ts`（有单测）：肤色只用浅、中两档；
+  先按 seed 定男女，男生耳环概率归零、女生不长胡子 —— micah 各部件默认独立随机，
+  不管的话会掉出「有睫毛还留胡子」这种组合。散列一改所有人集体变脸，别动。
 - **署名要求（CC BY 4.0）**：在"关于/规则"页注明 `Avatar artwork: "Avatar Illustration System" by Micah Lanier, CC BY 4.0`。
 - 备选方案：直接搬运 vue-color-avatar 的 Vue SFC 部件转 React（部件更多、风格略不同），工作量大得多，除非你就要那个特定观感。
 

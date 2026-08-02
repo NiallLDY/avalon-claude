@@ -9,6 +9,7 @@ import { useMemo } from "react";
 import { createAvatar } from "@dicebear/core";
 import { micah } from "@dicebear/collection";
 import type { Avatar as AvatarSpec } from "@avalon/shared";
+import { avatarOptions } from "../lib/avatar.js";
 
 interface Props {
   readonly avatar: AvatarSpec;
@@ -25,6 +26,7 @@ export const Avatar = ({ avatar, size = 40, className = "", dim = false }: Props
         backgroundColor: [avatar.bg],
         radius: 50,
         size: 128,
+        ...avatarOptions(avatar.seed),
       }).toDataUri(),
     [avatar.seed, avatar.bg],
   );
