@@ -181,6 +181,9 @@ export const Toggle = ({
 }) => (
   <button
     type="button"
+    /* 开关的状态得能被读出来 —— 光看那个圆点在左在右，读屏和测试都无从判断 */
+    role="switch"
+    aria-checked={checked}
     disabled={disabled}
     onClick={() => onChange(!checked)}
     className="flex w-full items-center justify-between gap-3 py-3 text-left disabled:opacity-40"

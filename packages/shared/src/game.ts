@@ -56,8 +56,8 @@ export interface GameSettings {
    * 奥伯伦两边都不沾：队友名单里本来就没有他（`visibleToEvil: false`），
    * 他自己也拿不到任何视野（`seesEvil: false`），开了这个开关也一样。
    *
-   * 默认关。开了之后红方开局就知道刺客是谁、莫德雷德是谁，
-   * 配合默契高不少，也少了一层红方内部的信息差。
+   * **默认开。** 红方开局就知道刺客是谁、莫德雷德是谁，配合默契高不少；
+   * 关掉的话红方内部还多一层信息差，想玩硬一点的再关。
    */
   readonly evilKnowRoles: boolean;
 }
@@ -72,7 +72,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   hideLoyaltyFlipResult: false,
   lancelotsKnowEachOther: false,
   spectatorsSeeRoles: false,
-  evilKnowRoles: false,
+  evilKnowRoles: true,
 };
 
 /**

@@ -31,7 +31,9 @@ const legacySnapshot = (): RoomSnapshot => {
 describe("fromSnapshot", () => {
   it("补上快照里没有的设置项", () => {
     const room = fromSnapshot(legacySnapshot());
-    expect(room.settings.evilKnowRoles).toBe(false);
+    // 断言「补成了默认值」而不是某个具体的 true/false ——
+    // 默认值本来就会改，这条测的是「补没补」，不是那一档开关怎么设
+    expect(room.settings.evilKnowRoles).toBe(DEFAULT_SETTINGS.evilKnowRoles);
   });
 
   /**

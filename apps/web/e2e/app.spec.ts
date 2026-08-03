@@ -178,7 +178,7 @@ test.describe("房间", () => {
     await page.getByRole("button", { name: "设置" }).click();
 
     await expect(page.getByText(/官方规则限 7 人及以上/)).toBeVisible();
-    const toggle = page.getByRole("button", { name: /湖中女神/ });
+    const toggle = page.getByRole("switch", { name: /湖中女神/ });
     await expect(toggle).toBeDisabled();
   });
 
@@ -798,7 +798,7 @@ test.describe("湖中女神", () => {
     await host.getByRole("button", { name: "设置" }).click();
     const sheet = host.getByRole("dialog");
     await sheet.getByRole("button", { name: "7", exact: true }).click();
-    await sheet.getByRole("button", { name: /湖中女神/ }).click();
+    await sheet.getByRole("switch", { name: /湖中女神/ }).click();
     await host.keyboard.press("Escape");
     await expect(host.getByRole("dialog")).toHaveCount(0);
 
@@ -1056,8 +1056,8 @@ test.describe("兰斯洛特互认", () => {
     const sheet = host.getByRole("dialog");
     await sheet.getByRole("button", { name: "7", exact: true }).click();
     await sheet.getByRole("button", { name: /兰斯洛特/ }).first().click();
-    await expect(sheet.getByRole("button", { name: /兰斯洛特互认/ })).toBeVisible();
-    await sheet.getByRole("button", { name: /兰斯洛特互认/ }).click();
+    await expect(sheet.getByRole("switch", { name: /兰斯洛特互认/ })).toBeVisible();
+    await sheet.getByRole("switch", { name: /兰斯洛特互认/ }).click();
     await host.keyboard.press("Escape");
     await expect(host.getByRole("dialog")).toHaveCount(0);
 
@@ -1100,7 +1100,7 @@ test.describe("坏人互认身份", () => {
    * 要验的是两件事：互认的坏人真看到了队友的角色名，
    * **而奥伯伦一个人都不认识、也没被任何人认出来**。
    */
-  test("开了之后互认的坏人看到队友角色，奥伯伦两头都不沾", async ({ browser }) => {
+  test("默认就开着：互认的坏人看到队友角色，奥伯伦两头都不沾", async ({ browser }) => {
     test.setTimeout(120_000);
     const ctxs = await Promise.all(
       Array.from({ length: 7 }, () => browser.newContext({ locale: "zh-CN" })),
@@ -1113,7 +1113,11 @@ test.describe("坏人互认身份", () => {
     await host.getByRole("button", { name: "设置" }).click();
     const sheet = host.getByRole("dialog");
     await sheet.getByRole("button", { name: "7", exact: true }).click();
-    await sheet.getByRole("button", { name: /坏人互认身份/ }).click();
+    // 这个开关默认就是开的，别再点一下 —— 那是把它关掉
+    await expect(sheet.getByRole("switch", { name: /坏人互认身份/ })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
     await host.keyboard.press("Escape");
     await expect(host.getByRole("dialog")).toHaveCount(0);
 
@@ -1181,7 +1185,7 @@ test.describe("观战者看身份", () => {
     const code = await createRoom(host, "旁观局甲");
     await host.getByRole("button", { name: "设置" }).click();
     const sheet = host.getByRole("dialog");
-    await sheet.getByRole("button", { name: /观战者看身份/ }).click();
+    await sheet.getByRole("switch", { name: /观战者看身份/ }).click();
     await host.keyboard.press("Escape");
     await expect(host.getByRole("dialog")).toHaveCount(0);
 

@@ -349,7 +349,7 @@ export const Room = () => {
             />
             <Toggle
               label="坏人互认身份"
-              hint="本来互认的坏人连队友具体角色一起知道。奥伯伦不受影响，仍然谁都不认识"
+              hint="本来互认的坏人连队友具体角色一起知道。关掉就只知道「他是红方」。奥伯伦不受影响，仍然谁都不认识"
               checked={s.evilKnowRoles}
               disabled={!host}
               onChange={(evilKnowRoles) => patch({ evilKnowRoles })}
