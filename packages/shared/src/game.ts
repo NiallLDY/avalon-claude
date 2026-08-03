@@ -104,6 +104,25 @@ export interface Vision {
   readonly evilRoles: readonly { readonly seat: number; readonly roleId: RoleId }[];
 }
 
+/**
+ * 聊天频道。
+ *
+ * `ALL` 对局里所有人（含观战）都看得到；
+ * `EVIL` **只发给互相认得的坏人** —— 判据见 `engine/vision.ts` 的 `evilChatSeats`。
+ * 奥伯伦和红兰斯洛特都不在里面：前者跟谁都不互认，后者认不出队友，
+ * 让他读到这个频道等于把红方名单直接送给他。
+ */
+export type ChatChannel = "ALL" | "EVIL";
+
+/** 一条聊天。作者只记座位号，昵称头像由客户端拿 room.seats 现查 */
+export interface ChatMessage {
+  readonly id: number;
+  readonly channel: ChatChannel;
+  readonly seat: number;
+  readonly text: string;
+  readonly at: number;
+}
+
 export type WinReason =
   | "MISSIONS_SUCCEEDED"
   | "MISSIONS_FAILED"

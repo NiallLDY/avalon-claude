@@ -24,6 +24,23 @@ const EMPTY_VISION: Vision = {
   evilRoles: [],
 };
 
+/**
+ * 能进队友聊天频道的座位 —— **必须是「互相」认得**。
+ *
+ * 判据比 evilSees 更严：既要看得见别人（`seesEvil`），也要被别人看得见
+ * （`visibleToEvil`）。差这一层的两个角色都必须挡在外面：
+ *   - **奥伯伦**：两个标记都是 false，跟谁都不互认；
+ *   - **红兰斯洛特**：队友认得他，但他自己没有视野。让他读到这个频道，
+ *     等于把整份红方名单白送给他，那就不是兰斯洛特了。
+ *
+ * 和视野一样按**开局角色**算并冻结 —— 兰斯洛特换阵营不会让人进出频道，
+ * 否则中途多出来的那个人本身就是情报。
+ */
+export const evilChatSeats = (roles: readonly RoleId[]): readonly number[] =>
+  roles.flatMap((r, seat) =>
+    ROLES[r].side === "RED" && ROLES[r].seesEvil && ROLES[r].visibleToEvil ? [seat] : [],
+  );
+
 /** 座位 -> 是否红方（按开局角色，不看当前阵营） */
 const evilSeatsOf = (roles: readonly RoleId[]): number[] =>
   roles.flatMap((r, seat) => (ROLES[r].side === "RED" ? [seat] : []));

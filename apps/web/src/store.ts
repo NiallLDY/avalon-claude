@@ -126,6 +126,8 @@ interface AppState {
   rulesOpen: boolean;
   /** 排行榜页开着没 */
   boardOpen: boolean;
+  /** 已读到哪条聊天。用来算未读角标，不进服务端 */
+  chatSeen: number;
   lastEvent: GameEvent | null;
   /** 正在飞的花和蛋 */
   reactions: readonly FlyingReaction[];
@@ -140,6 +142,7 @@ interface AppState {
   completeOnboarding: () => void;
   setRulesOpen: (open: boolean) => void;
   setBoardOpen: (open: boolean) => void;
+  markChatSeen: (id: number) => void;
   createRoom: (opts: {
     name: string;
     visibility: "PUBLIC" | "PRIVATE";
@@ -236,6 +239,7 @@ export const useStore = create<AppState>((set, get) => ({
   pendingInvite: readInviteCode(),
   rulesOpen: false,
   boardOpen: false,
+  chatSeen: 0,
   lastEvent: null,
   reactions: [],
   emotes: [],
@@ -465,6 +469,8 @@ export const useStore = create<AppState>((set, get) => ({
   },
   setRulesOpen: (rulesOpen) => set({ rulesOpen }),
   setBoardOpen: (boardOpen) => set({ boardOpen }),
+  // 只前进不后退：先读到第 9 条再切回旧频道，不该把未读数又变回来
+  markChatSeen: (id) => set((st) => (id > st.chatSeen ? { chatSeen: id } : st)),
 
   createRoom: async (opts) => {
     const res = await fetch("/api/rooms", {

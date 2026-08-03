@@ -16,7 +16,7 @@ import {
   type RoleId,
 } from "@avalon/shared";
 import { dealRoles, roleDeck, canStart } from "./setup.js";
-import { computeVision } from "./vision.js";
+import { computeVision, evilChatSeats } from "./vision.js";
 import { seededRng } from "./rng.js";
 
 const ALL_COUNTS = [5, 6, 7, 8, 9, 10] as const;
@@ -403,6 +403,51 @@ describe("computeVision · 全局不变量", () => {
           expect(s, label).toBeGreaterThanOrEqual(0);
           expect(s, label).toBeLessThan(playerCount);
         }
+      }
+    });
+  });
+});
+
+/**
+ * 队友聊天频道的成员。判据必须比「红方」严：**要互相认得**。
+ * 这两个人差一层就都得挡在外面 —— 奥伯伦跟谁都不互认，
+ * 红兰斯洛特被队友认得但自己没视野。
+ */
+describe("evilChatSeats", () => {
+  it("只收互认的坏人，奥伯伦和红兰斯洛特都不在里面", () => {
+    forEveryDeal(({ roles, label }) => {
+      const members = evilChatSeats(roles);
+      for (const seat of members) {
+        const meta = ROLES[roles[seat]!];
+        expect(meta.side, `${label} @${seat}`).toBe("RED");
+        expect(meta.seesEvil, `${label} @${seat} ${roles[seat]} 认不出队友`).toBe(true);
+        expect(meta.visibleToEvil, `${label} @${seat} ${roles[seat]} 队友认不出他`).toBe(true);
+      }
+      for (const bad of ["OBERON", "LANCELOT_RED"] as const) {
+        const seat = roles.indexOf(bad);
+        if (seat >= 0) expect(members, `${label} ${bad}@${seat} 不该进频道`).not.toContain(seat);
+      }
+    });
+  });
+
+  it("和队友名单完全对得上 —— 频道成员就是彼此视野里的那些人", () => {
+    forEveryDeal(({ roles, label }) => {
+      const members = evilChatSeats(roles);
+      const vision = computeVision(roles, seededRng([1]));
+      for (const seat of members) {
+        // 他看到的队友 = 其余成员（外加可能的红兰，那是「被看见」不是「在频道里」）
+        const others = members.filter((s) => s !== seat);
+        for (const o of others) {
+          expect(vision[seat]!.evilSeats, `${label} @${seat} 看不到同频道的 @${o}`).toContain(o);
+        }
+      }
+    });
+  });
+
+  it("蓝方一个都不在", () => {
+    forEveryDeal(({ roles, label }) => {
+      for (const seat of evilChatSeats(roles)) {
+        expect(ROLES[roles[seat]!].side, `${label} @${seat}`).not.toBe("BLUE");
       }
     });
   });

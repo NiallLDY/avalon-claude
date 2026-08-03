@@ -13,6 +13,7 @@ import type { Server as IOServer, Socket } from "socket.io";
 import type { ClientEventName, GameEvent, Profile } from "@avalon/shared";
 import { CLIENT_EVENTS, profileSchema } from "@avalon/shared/schemas";
 import { BURST_COUNT } from "@avalon/shared";
+import { appendChat } from "@avalon/engine";
 import { config } from "./config.js";
 import { logger } from "./logger.js";
 import { createCounter, createRateLimiter } from "./ratelimit.js";
@@ -504,6 +505,35 @@ export const attachSocket = (
       if (seat < 0) return;
 
       io.to(`room:${room.id}`).emit("emote", { fromSeat: seat, emoteId: parsed.data.emoteId });
+    });
+
+    /*
+     * 聊天。和扔东西共用一套限流，非法输入静默丢弃 ——
+     * 尤其是「你不在这个频道」这种：回一句错误就等于给探测者一个神谕，
+     * 拿它挨个试就能问出谁是互认的坏人。
+     */
+    listen("game:chat", (raw: unknown) => {
+      if (!reactLimiter.hit(socket.id, now())) return;
+      const parsed = CLIENT_EVENTS["game:chat"].safeParse(raw ?? {});
+      if (!parsed.success) return;
+      const room = socket.data.roomId ? registry.get(socket.data.roomId) : null;
+      if (!room?.game) return;
+
+      // 观战和等待区的人只能看，不能说 —— 消息是挂在座位号上的
+      const seat = seatOf(room, socket.data.playerId);
+      if (seat < 0) return;
+
+      const next = appendChat(room.game, {
+        seat,
+        channel: parsed.data.channel,
+        text: parsed.data.text,
+        at: now(),
+      });
+      if (!next) return;
+
+      room.game = next;
+      // 逐人裁剪后单播，走的是和其他状态变更同一条路 —— 队友频道不能群发
+      pushRoom(room);
     });
 
     socket.on("disconnect", () => {

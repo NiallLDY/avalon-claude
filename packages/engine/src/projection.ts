@@ -11,6 +11,7 @@
 
 import { TEAM_SIZE, type ClientGameView } from "@avalon/shared";
 import { assassinSeat, canEarlyAssassinate, ladyTargets, missionCardRule } from "./machine.js";
+import { evilChatSeats } from "./vision.js";
 import type { GameState } from "./types.js";
 
 const seatsWhere = (flags: readonly unknown[], pred: (v: unknown) => boolean): number[] =>
@@ -91,6 +92,13 @@ export const projectFor = (state: GameState, viewerSeat: number | null): ClientG
     outcome: state.outcome,
     reveal: isOver ? [...state.roles] : null,
 
+    /*
+     * 聊天。**基线只给公共频道** —— 队友频道在下面按成员逐一放行。
+     * 默认给最少的那一份，加错地方顶多少看到几条；反过来默认给全量、
+     * 再去某个分支里减，漏一个分支就是把红方名单发出去。
+     */
+    chat: state.chat.filter((m) => m.channel === "ALL"),
+
     me: null,
     spectate: null,
   };
@@ -105,6 +113,9 @@ export const projectFor = (state: GameState, viewerSeat: number | null): ClientG
     if (!state.settings.spectatorsSeeRoles || isOver) return view;
     return {
       ...view,
+      // 全知视角连队友频道一起给：这个分支本来就已经把全员身份和视野都发了，
+      // 单独藏着聊天记录没有意义，而观战最好看的恰恰是红方怎么串供
+      chat: [...state.chat],
       spectate: {
         roles: [...state.roles],
         sides: [...state.sides],
@@ -118,8 +129,12 @@ export const projectFor = (state: GameState, viewerSeat: number | null): ClientG
   const vision = state.vision[viewerSeat];
   if (roleId === undefined || side === undefined || vision === undefined) return view;
 
+  // 队友频道只发给**互相**认得的那几个人。奥伯伦和红兰斯洛特都不在里面
+  const inEvilChat = evilChatSeats(state.roles).includes(viewerSeat);
+
   return {
     ...view,
+    ...(inEvilChat ? { chat: [...state.chat] } : {}),
     me: {
       seat: viewerSeat,
       roleId,
@@ -130,6 +145,7 @@ export const projectFor = (state: GameState, viewerSeat: number | null): ClientG
       isOnTeam: state.team?.includes(viewerSeat) ?? false,
       myVote: state.votes[viewerSeat] ?? null,
       myCard: state.cards[viewerSeat] ?? null,
+      canEvilChat: inEvilChat,
       canAssassinate: state.phase === "ASSASSINATION" && assassinSeat(state) === viewerSeat,
       canEarlyAssassinate:
         canEarlyAssassinate(state) && assassinSeat(state) === viewerSeat,

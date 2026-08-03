@@ -17,6 +17,11 @@ import {
   TEAM_SIZE,
   failsRequired,
   type ErrorCode,
+  CHAT_TEXT_MAX,
+  CHAT_HISTORY_MAX,
+  sanitizeText,
+  type ChatChannel,
+  type ChatMessage,
   type GameEvent,
   type GameSettings,
   type MissionCardRule,
@@ -27,7 +32,7 @@ import {
 } from "@avalon/shared";
 import { shuffle, type Rng } from "./rng.js";
 import { dealRoles, initialSides } from "./setup.js";
-import { computeVision } from "./vision.js";
+import { computeVision, evilChatSeats } from "./vision.js";
 import type { Action, GameState, ReduceResult } from "./types.js";
 
 // ──────────────────────────── 小工具 ────────────────────────────
@@ -135,6 +140,7 @@ export const createGame = (opts: CreateGameOptions, rng: Rng): GameState => {
     sides: initialSides(roles),
     vision: computeVision(roles, rng, settings),
     roleAcked: roles.map(() => false),
+    chat: [],
     roundIndex: 0,
     leaderSeat,
     attempt: 0,
@@ -528,4 +534,35 @@ export const reduce = (state: GameState, action: Action, rng: Rng): ReduceResult
       }
     }
   }
+};
+
+// ──────────────────────────── 聊天 ────────────────────────────
+
+/**
+ * 追加一条聊天。**不走 reduce** —— 它不改变任何规则状态，
+ * 也不该受阶段限制（看牌时、终局后都能说话）。
+ *
+ * 但**成员判定必须留在引擎里**：谁能往队友频道发，和谁能读它是同一条规则
+ * （`evilChatSeats`），拆到服务端就迟早会出现两套判据。不允许时返回 null，
+ * 调用方静默丢弃 —— 回一个「你不在这个频道」等于给探测者一个神谕。
+ */
+export const appendChat = (
+  state: GameState,
+  msg: { readonly seat: number; readonly channel: ChatChannel; readonly text: string; readonly at: number },
+): GameState | null => {
+  const text = sanitizeText(msg.text, CHAT_TEXT_MAX);
+  if (!text) return null;
+  if (msg.seat < 0 || msg.seat >= state.playerCount) return null;
+  if (msg.channel === "EVIL" && !evilChatSeats(state.roles).includes(msg.seat)) return null;
+
+  const next: ChatMessage = {
+    // 递增的 id 由长度推不出来（会截断），拿最后一条的 id 往上加
+    id: (state.chat[state.chat.length - 1]?.id ?? 0) + 1,
+    channel: msg.channel,
+    seat: msg.seat,
+    text,
+    at: msg.at,
+  };
+  // 只留最近 CHAT_HISTORY_MAX 条：整份聊天记录每次状态推送都要重发一遍
+  return { ...state, chat: [...state.chat, next].slice(-CHAT_HISTORY_MAX) };
 };

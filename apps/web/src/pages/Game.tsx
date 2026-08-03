@@ -20,6 +20,7 @@ import { ProfileButton } from "../components/Profile.js";
 import { EmoteMenu, SpectatorPeek, ThrowMenu } from "../components/ReactMenu.js";
 import { SeatBoard } from "../components/SeatBoard.js";
 import { RoleCard } from "../components/RoleCard.js";
+import { Chat } from "../components/Chat.js";
 import { Button, Latency, Sheet } from "../components/ui.js";
 import { Report } from "./Report.js";
 import { labeler, seatNo } from "../lib/labels.js";
@@ -177,8 +178,9 @@ const PHASE_HINT: Record<string, string> = {
 
 export const Game = () => {
   const { state, act, react, emote, emit, leaveRoom } = useStore();
+  const chatSeen = useStore((st) => st.chatSeen);
   const [picked, setPicked] = useState<number[]>([]);
-  const [sheet, setSheet] = useState<"role" | "report" | null>(null);
+  const [sheet, setSheet] = useState<"role" | "report" | "chat" | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [confirmAbort, setConfirmAbort] = useState(false);
   /** 正要朝谁扔东西。null = 没在扔 */
@@ -205,6 +207,8 @@ export const Game = () => {
   if (!state || !game) return null;
   const { room } = state;
   const me = game.me;
+  // 未读数只按「看得到的那些」算 —— 队友频道的消息根本不在别人的 chat 里
+  const unread = game.chat.filter((m) => m.id > chatSeen).length;
   /*
    * 观战者的全知视角。只有房主开了开关、而且自己没坐下时服务端才会下发；
    * 在座玩家这里恒为 null —— 不是前端「不显示」，是根本没发过来。
@@ -406,6 +410,21 @@ export const Game = () => {
           </Button>
           <Button
             tone="ghost"
+            className="relative flex-1 text-xs"
+            onClick={() => setSheet("chat")}
+          >
+            聊天
+            {unread > 0 ? (
+              <span
+                className="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-gold px-1
+                  text-[0.6rem] font-bold leading-4 text-ground"
+              >
+                {unread > 9 ? "9+" : unread}
+              </span>
+            ) : null}
+          </Button>
+          <Button
+            tone="ghost"
             className="flex-1 text-xs"
             onClick={() => useStore.getState().setRulesOpen(true)}
           >
@@ -429,6 +448,9 @@ export const Game = () => {
       </Sheet>
       <Sheet open={sheet === "report"} onOpenChange={(o) => setSheet(o ? "report" : null)} title="战报">
         <Report game={game} seated={room.seats} />
+      </Sheet>
+      <Sheet open={sheet === "chat"} onOpenChange={(o) => setSheet(o ? "chat" : null)} title="聊天">
+        <Chat game={game} seated={room.seats} />
       </Sheet>
 
       {/* 对局中退出座位是保留的 —— 得说清楚怎么回来，不然人会以为把牌局搞砸了 */}

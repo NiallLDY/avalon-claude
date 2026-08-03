@@ -6,7 +6,7 @@
  */
 
 import type { MissionCardRule, RoleId, Side } from "./roles.js";
-import type { Outcome, Phase, SpeakDirection, Vision } from "./game.js";
+import type { ChatMessage, Outcome, Phase, SpeakDirection, Vision } from "./game.js";
 
 /** 任务结果。刻意没有「谁出了哪张牌」—— CLAUDE.md 铁律 3 */
 export interface PublicMissionSummary {
@@ -62,6 +62,12 @@ export interface SelfView {
   readonly isOnTeam: boolean;
   readonly myVote: boolean | null;
   readonly myCard: boolean | null;
+  /**
+   * 能不能在队友频道发言。**由服务端算好下发**，客户端不要自己推 ——
+   * 「谁算互认」这条判据只能有一处（`engine` 的 `evilChatSeats`），
+   * 前端照着 vision 猜一遍迟早会和后端对不上。
+   */
+  readonly canEvilChat: boolean;
   readonly canAssassinate: boolean;
   readonly canEarlyAssassinate: boolean;
   /** 我作为女神查验过的结果。别人查到什么永远看不到 */
@@ -109,6 +115,14 @@ export interface ClientGameView {
    * 而且这局确实在进行。见 GAME.md §11。
    */
   readonly spectate: SpectatorView | null;
+  /**
+   * 我看得到的聊天。
+   *
+   * 公共频道人人有；队友频道**只发给互认的坏人**（`engine` 的 `evilChatSeats`），
+   * 以及开了全知视角的观战者。别的人拿到的数组里根本不会出现那些条目 ——
+   * 不是前端不显示，是压根没下发。
+   */
+  readonly chat: readonly ChatMessage[];
 }
 
 /** 观战者全知视角。裁剪逻辑见 `projectFor`，安全断言见 projection.test.ts */

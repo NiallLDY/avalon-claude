@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 import { ROLE_IDS, ROLES, type RoleId } from "@avalon/shared";
 import { seededRng } from "./rng.js";
 import { computeVision } from "./vision.js";
-import { createGame, ladyTargets, reduce } from "./machine.js";
+import { appendChat, createGame, ladyTargets, reduce } from "./machine.js";
 import { projectFor } from "./projection.js";
 import type { GameSettings, PlayerCount } from "@avalon/shared";
 import type { Action, GameState } from "./types.js";
@@ -352,6 +352,73 @@ describe("自己的视野", () => {
       );
       expect(view.me!.canAssassinate, label).toBe(viewer === assassin);
     });
+  });
+});
+
+/**
+ * 聊天裁剪。**队友频道是这个项目里最容易泄漏的东西** ——
+ * 一条消息带着座位号，谁收到了谁就知道发的人是红方。
+ */
+describe("聊天 · 裁剪", () => {
+  // SEVEN_STD：0 梅林 1 派西 2/3 忠臣 4 莫甘娜 5 刺客 6 奥伯伦
+  const MORGANA = 4;
+  const ASSASSIN = 5;
+  const OBERON = 6;
+  const BLUE = [0, 1, 2, 3];
+
+  /** 摆一局，公共频道和队友频道各塞一条 */
+  const withChat = (over: Partial<GameSettings> = {}): GameState => {
+    const base = makeGame(SEVEN_STD, over);
+    const a = appendChat(base, { seat: 0, channel: "ALL", text: "大家好", at: 1 });
+    const b = appendChat(a!, { seat: MORGANA, channel: "EVIL", text: "打 3 号", at: 2 });
+    return b!;
+  };
+
+  it("公共频道人人都有", () => {
+    const state = withChat();
+    for (const viewer of [...BLUE, MORGANA, ASSASSIN, OBERON, null]) {
+      const texts = projectFor(state, viewer).chat.map((m) => m.text);
+      expect(texts, `@${viewer}`).toContain("大家好");
+    }
+  });
+
+  it("队友频道只给互认的坏人 —— 蓝方和奥伯伦一个字都收不到", () => {
+    const state = withChat();
+    for (const viewer of [MORGANA, ASSASSIN]) {
+      expect(projectFor(state, viewer).chat.map((m) => m.text), `@${viewer}`).toContain("打 3 号");
+    }
+    for (const viewer of [...BLUE, OBERON, null]) {
+      const view = projectFor(state, viewer);
+      expect(view.chat.some((m) => m.channel === "EVIL"), `@${viewer} 收到了队友频道`).toBe(false);
+      // 连正文都不该在序列化结果里出现
+      expect(JSON.stringify(view), `@${viewer}`).not.toContain("打 3 号");
+    }
+  });
+
+  it("奥伯伦发不出队友频道 —— 引擎那一层就拒了", () => {
+    const base = makeGame(SEVEN_STD);
+    expect(appendChat(base, { seat: OBERON, channel: "EVIL", text: "我也是红的", at: 1 })).toBeNull();
+    // 公共频道照发不误
+    expect(appendChat(base, { seat: OBERON, channel: "ALL", text: "我是好人", at: 1 })).not.toBeNull();
+  });
+
+  it("蓝方发不出队友频道", () => {
+    const base = makeGame(SEVEN_STD);
+    for (const seat of BLUE) {
+      expect(
+        appendChat(base, { seat, channel: "EVIL", text: "偷听", at: 1 }),
+        `@${seat} 居然发得出去`,
+      ).toBeNull();
+    }
+  });
+
+  it("开了全知视角的观战者才看得到队友频道", () => {
+    expect(
+      projectFor(withChat({ spectatorsSeeRoles: true }), null).chat.some((m) => m.channel === "EVIL"),
+    ).toBe(true);
+    expect(
+      projectFor(withChat({ spectatorsSeeRoles: false }), null).chat.some((m) => m.channel === "EVIL"),
+    ).toBe(false);
   });
 });
 

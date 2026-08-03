@@ -11,6 +11,7 @@
  */
 
 import type {
+  ChatMessage,
   ErrorCode,
   GameEvent,
   GameSettings,
@@ -91,6 +92,11 @@ export interface GameState {
   /** 开局冻结的视野，不随阵营转换更新 */
   readonly vision: readonly Vision[];
   readonly roleAcked: readonly boolean[];
+  /**
+   * 两个频道的聊天记录，按时间混在一起存。
+   * **裁剪在 `projectFor`**：`EVIL` 那些只发给 `evilChatSeats` 里的人。
+   */
+  readonly chat: readonly ChatMessage[];
 
   readonly roundIndex: number;
   readonly leaderSeat: number;

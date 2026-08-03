@@ -165,6 +165,7 @@ function projectFor(game: Game, viewer: PlayerId | null): ClientGameView
 | `game:restart` | `{}` | **任何在座玩家**；终局后把房间退回等待页（保留座位与设置，清空准备），不直接发牌。终局画面在各自客户端本地留一份，谁点掉谁走 |
 | `game:action` | `{ action: ClientAction }` | 全部对局动作走这一个通道 |
 | `game:react` | `{ targetSeat, kind }` | 献花 / 砸蛋。**仅组队阶段**，扔的人座位号由服务端填。**独立限流**，不占操作配额 |
+| `game:chat` | `{ channel, text }` | 聊天。`channel` 是 `ALL` / `EVIL`；座位号由服务端填。`EVIL` 能不能发由引擎的 `evilChatSeats` 判，不合格**静默丢弃**（回错误等于给探测者一个神谕）。与 `game:react` 共用限流 |
 | `net:ping` | `{ t }` | 测延迟；`t` 是客户端时间戳，服务端原样回声。**独立限流**，不占操作配额 |
 
 `ClientAction` 是 `ACK_ROLE` / `PROPOSE_TEAM` / `VOTE` / `PLAY_CARD` / `LADY_CHECK` /
@@ -192,6 +193,9 @@ function projectFor(game: Game, viewer: PlayerId | null): ClientGameView
 > 它会把同一份 payload 发给房间里所有人，等于把身份全发出去。
 > 只有 `event`（播动画音效用的一次性提示，不含机密）和 `reaction`（献花砸蛋，
 > 只有座位号和花/蛋）才允许群发 —— 判据是「这份 payload 对房间里每个人都该长一样吗」。
+>
+> **聊天不在群发之列。** 队友频道的一条消息带着发言人的座位号，谁收到谁就知道
+> 那个人是红方。它跟着 `state` 一起走 `projectFor` 裁剪后单播。
 
 ---
 

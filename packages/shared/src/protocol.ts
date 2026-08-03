@@ -26,6 +26,17 @@ export const sanitizeText = (raw: string, maxLength: number): string =>
 export const NICK_MAX = 12;
 export const ROOM_NAME_MAX = 20;
 
+/** 一条聊天最多这么长。手机上一屏能看完，也压住单条刷屏 */
+export const CHAT_TEXT_MAX = 80;
+/**
+ * 每个频道留多少条历史。
+ *
+ * 聊天记录挂在对局状态上，而**每次状态变更都全量下发**（PLAN §5）——
+ * 留太多就等于每个动作都重发一遍聊天室。50 条够回溯刚才说了什么，
+ * 又不至于把每次推送撑大。
+ */
+export const CHAT_HISTORY_MAX = 50;
+
 /**
  * 房间码：**6 位纯数字**。
  *
@@ -106,6 +117,8 @@ export const CLIENT_EVENT_NAMES = [
   "game:action",
   /** 献花 / 砸鸡蛋。纯玩梗，不影响任何规则 */
   "game:react",
+  /** 聊天。两个频道：所有人 / 互认的坏人 */
+  "game:chat",
   "game:emote",
   /** 测延迟用的心跳。服务端原样回 net:pong，往返差就是 RTT */
   "net:ping",

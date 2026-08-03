@@ -1165,6 +1165,83 @@ test.describe("坏人互认身份", () => {
   });
 });
 
+test.describe("聊天", () => {
+  /**
+   * 5 人局固定是莫甘娜 + 刺客互认，没有奥伯伦。
+   * 要验的是**队友频道没被别人看到** —— 界面上看不到只是第一层，
+   * 更要紧的是它压根没下发。
+   */
+  test("公共频道全场可见；队友频道只有互认的坏人看得到", async ({ browser }) => {
+    test.setTimeout(120_000);
+    const ctxs = await Promise.all(
+      Array.from({ length: 5 }, () => browser.newContext({ locale: "zh-CN" })),
+    );
+    const pages = await Promise.all(ctxs.map((c) => c.newPage()));
+    for (const [i, p] of pages.entries()) await openApp(p, `聊${i + 1}`);
+
+    const host = pages[0]!;
+    const code = await createRoom(host, "聊天测试");
+    await sit(host, 0);
+    for (const [i, p] of pages.slice(1).entries()) {
+      await p.getByPlaceholder("房间码").fill(code);
+      await p.getByRole("button", { name: "进", exact: true }).click();
+      await sit(p, i + 1);
+    }
+    for (const p of pages) await p.getByRole("button", { name: "准备" }).click();
+    await host.getByRole("button", { name: "开始游戏" }).click();
+
+    // 看牌，记下谁是红方
+    const redSeats: number[] = [];
+    for (const [i, p] of pages.entries()) {
+      const dialog = p.getByRole("dialog");
+      await dialog.getByRole("button", { name: /点击查看身份/ }).click();
+      if (await dialog.locator('[data-my-side="RED"]').count()) redSeats.push(i);
+      await p.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+    }
+    expect(redSeats, "5 人局该有两个红方").toHaveLength(2);
+
+    // ── 公共频道 ──
+    await host.getByRole("button", { name: /^聊天/ }).click();
+    await host.getByPlaceholder("说点什么…").fill("大家好啊");
+    await host.getByRole("button", { name: "发送" }).click();
+    for (const p of pages) {
+      if (p !== host) await p.getByRole("button", { name: /^聊天/ }).click();
+      await expect(p.getByText("大家好啊")).toBeVisible();
+    }
+
+    // ── 队友频道 ──
+    const red = pages[redSeats[0]!]!;
+    const other = pages[redSeats[1]!]!;
+    const blues = pages.filter((_, i) => !redSeats.includes(i));
+
+    // 蓝方连「队友」这个标签都不该有 —— 标签本身就是一条情报
+    for (const p of blues) {
+      await expect(p.getByRole("button", { name: "队友", exact: true })).toHaveCount(0);
+    }
+
+    await red.getByRole("button", { name: "队友", exact: true }).click();
+    await red.getByPlaceholder("只有队友看得到…").fill("别投三号");
+    await red.getByRole("button", { name: "发送" }).click();
+
+    await other.getByRole("button", { name: "队友", exact: true }).click();
+    await expect(other.getByText("别投三号")).toBeVisible();
+
+    /*
+     * 蓝方界面上不该出现这句话。
+     *
+     * 注意这条只验到**界面**这一层 —— 「有没有下发到蓝方的 payload 里」
+     * 在这儿验不了，那条断言在 socket.test.ts 的「队友频道只到互认的坏人手里」，
+     * 它直接读连接收到的 state。两条缺一不可：这条挂了是界面漏，那条挂了是协议漏。
+     */
+    for (const [i, p] of blues.entries()) {
+      await expect(p.getByText("别投三号"), `蓝方 ${i} 看到了队友频道`).toHaveCount(0);
+    }
+
+    for (const c of ctxs) await c.close();
+  });
+});
+
 test.describe("观战者看身份", () => {
   /**
    * 房主开关，默认关。这条既验观战者真能看到，

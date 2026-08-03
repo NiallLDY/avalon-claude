@@ -533,3 +533,91 @@ describe("观战者", () => {
     for (const role of ROLE_IDS) expect(json).not.toContain(`"${role}"`);
   });
 });
+
+/**
+ * 聊天。要验的不是「发得出去」，而是**队友频道有没有被广播出去**。
+ *
+ * 这一层最容易出的错是图省事写 `io.to(room).emit(...)` —— 那样一条队友消息
+ * 会原样发给全场，蓝方抓包就知道发的人是红方。所以断言落在
+ * 「别人收到的 payload 里有没有这条」，而不是界面显不显示。
+ */
+describe("聊天", () => {
+  it("公共频道所有人都收得到", async () => {
+    const { members } = await setupRoom(5);
+    members[0]!.socket.emit("game:start", {});
+    await waitFor(members, (c) => c.state?.game?.phase === "ROLE_REVEAL", "发牌");
+
+    members[2]!.socket.emit("game:chat", { channel: "ALL", text: "大家好" });
+    await waitFor(members, (c) => (c.state?.game?.chat.length ?? 0) > 0, "公共消息到齐");
+
+    for (const c of members) {
+      const msg = c.state!.game!.chat[0]!;
+      expect(msg.text, c.id).toBe("大家好");
+      expect(msg.seat, c.id).toBe(2);
+      expect(msg.channel, c.id).toBe("ALL");
+    }
+  });
+
+  it("队友频道只到互认的坏人手里，别人的 payload 里连字都没有", async () => {
+    const { members } = await setupRoom(5);
+    members[0]!.socket.emit("game:start", {});
+    await waitFor(members, (c) => c.state?.game?.phase === "ROLE_REVEAL", "发牌");
+
+    /*
+     * 认人只能看 canEvilChat。**不能拿 evilSeats 非空判断** ——
+     * 梅林的视野里也有一串红方座位，那样会把梅林算成坏人。
+     */
+    const evil = members.filter((c) => c.state!.game!.me!.canEvilChat);
+    expect(evil.length, "5 人局该有两个互认的坏人").toBe(2);
+    const blue = members.filter((c) => !evil.includes(c));
+
+    const secret = "刺客是我别投我";
+    evil[0]!.socket.emit("game:chat", { channel: "EVIL", text: secret });
+    await waitFor(evil, (c) => (c.state?.game?.chat.length ?? 0) > 0, "队友消息到齐");
+
+    for (const c of evil) {
+      expect(c.state!.game!.chat.map((m) => m.text), c.id).toContain(secret);
+    }
+    for (const c of blue) {
+      // 整份下行 payload 里都不该出现 —— 不是「前端不显示」
+      expect(JSON.stringify(c.state), `${c.id} 收到了队友频道`).not.toContain(secret);
+      expect(c.state!.game!.chat.some((m) => m.channel === "EVIL"), c.id).toBe(false);
+    }
+  });
+
+  it("蓝方硬发队友频道会被静默丢弃，谁都收不到", async () => {
+    const { members } = await setupRoom(5);
+    members[0]!.socket.emit("game:start", {});
+    await waitFor(members, (c) => c.state?.game?.phase === "ROLE_REVEAL", "发牌");
+
+    const blue = members.find((c) => c.state!.game!.me!.side === "BLUE")!;
+    blue.socket.emit("game:chat", { channel: "EVIL", text: "我是内鬼" });
+    // 没有「被拒」的回执可等，就发一条正常消息当水位线：它到了说明前一条已经处理完
+    blue.socket.emit("game:chat", { channel: "ALL", text: "水位线" });
+    await waitFor(members, (c) => (c.state?.game?.chat.length ?? 0) > 0, "水位线到达");
+
+    for (const c of members) {
+      expect(c.state!.game!.chat.map((m) => m.text), c.id).toEqual(["水位线"]);
+    }
+  });
+
+  it("没入座的观战者只能看，发不出去", async () => {
+    const { roomId, members } = await setupRoom(5);
+    members[0]!.socket.emit("game:start", {});
+    await waitFor(members, (c) => c.state?.game?.phase === "ROLE_REVEAL", "发牌");
+
+    const watcher = await connectClient("watcher");
+    const joined = nextState(watcher);
+    watcher.socket.emit("room:join", { roomId });
+    watcher.state = await joined;
+
+    watcher.socket.emit("game:chat", { channel: "ALL", text: "让我说一句" });
+    members[1]!.socket.emit("game:chat", { channel: "ALL", text: "水位线" });
+    await waitFor(members, (c) => (c.state?.game?.chat.length ?? 0) > 0, "水位线到达");
+
+    expect(members[0]!.state!.game!.chat.map((m) => m.text)).toEqual(["水位线"]);
+    // 但看是能看的
+    await waitFor([watcher], (c) => (c.state?.game?.chat.length ?? 0) > 0, "观战者收到公共消息");
+    expect(watcher.state!.game!.chat.map((m) => m.text)).toEqual(["水位线"]);
+  });
+});

@@ -10,6 +10,7 @@ import { z } from "zod";
 import { MAX_PLAYERS, MIN_PLAYERS } from "./tables.js";
 import type { GameSettings } from "./game.js";
 import {
+  CHAT_TEXT_MAX,
   CLIENT_EVENT_NAMES,
   NICK_MAX,
   REACTIONS,
@@ -126,6 +127,15 @@ export const CLIENT_EVENTS = {
     kind: z.enum(REACTIONS),
     /** 连发。服务端把它翻成 BURST_COUNT 个，客户端只发一条 */
     burst: z.boolean().optional(),
+  }),
+  /**
+   * 聊天。**座位号不在 payload 里** —— 和所有对局动作一样由服务端按连接身份填。
+   * 频道能不能发由引擎判（`appendChat`），这里只管形状。
+   */
+  "game:chat": z.object({
+    channel: z.enum(["ALL", "EVIL"]),
+    // 长度在这里先挡一道，免得拿超长串去跑清洗函数烧 CPU；清洗后还会再截一次
+    text: z.string().min(1).max(CHAT_TEXT_MAX * 4),
   }),
   /** 点自己头像发的表情包，不针对任何人 */
   "game:emote": z.object({
