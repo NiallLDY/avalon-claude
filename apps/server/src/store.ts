@@ -9,6 +9,7 @@
  */
 
 import { Redis } from "ioredis";
+import { DEFAULT_SETTINGS } from "@avalon/shared";
 import type { GameState } from "@avalon/engine";
 import { config } from "./config.js";
 import type { Room, RoomPlayer } from "./rooms.js";
@@ -20,7 +21,7 @@ const roomKey = (id: string) => `avalon:${KEY_VERSION}:room:${id}`;
 const reportKey = (id: string) => `avalon:${KEY_VERSION}:report:${id}`;
 const ROOM_INDEX = `avalon:${KEY_VERSION}:rooms`;
 
-interface RoomSnapshot {
+export interface RoomSnapshot {
   readonly id: string;
   readonly name: string;
   readonly visibility: Room["visibility"];
@@ -53,7 +54,8 @@ const toSnapshot = (room: Room): RoomSnapshot => ({
   ownerIp: room.ownerIp,
 });
 
-const fromSnapshot = (snap: RoomSnapshot): Room => ({
+/** 导出只为单测：跨版本的快照怎么还原，是最容易悄悄坏掉的一段 */
+export const fromSnapshot = (snap: RoomSnapshot): Room => ({
   id: snap.id,
   name: snap.name,
   visibility: snap.visibility,
@@ -63,7 +65,15 @@ const fromSnapshot = (snap: RoomSnapshot): Room => ({
   players: new Map(snap.players.map((p) => [p.id, { ...p }])),
   seatCount: snap.seatCount,
   seats: [...snap.seats],
-  settings: snap.settings,
+  /*
+   * 补上快照里没有的设置项。
+   *
+   * 快照是发版前写的，新加的开关在里面根本不存在 —— 直接用会留下一个
+   * undefined。房主随便改一个别的设置时，客户端把整份 settings 发回来，
+   * 那个 undefined 被 JSON 丢掉，Zod 的 z.boolean() 当场拒掉整个 payload，
+   * 于是「改设置没反应」，而且只在跨版本存活的房间里发生，最难查。
+   */
+  settings: { ...DEFAULT_SETTINGS, ...snap.settings },
   game: snap.game,
   createdAt: snap.createdAt,
   updatedAt: snap.updatedAt,
