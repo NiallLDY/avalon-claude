@@ -23,6 +23,8 @@ const seatsWhere = (flags: readonly unknown[], pred: (v: unknown) => boolean): n
  */
 export const projectFor = (state: GameState, viewerSeat: number | null): ClientGameView => {
   const isOver = state.phase === "GAME_OVER";
+  // 兼容新增聊天字段前写下、又在发版后恢复的快照。
+  const chat = state.chat ?? [];
   // 揭票只发生在 VOTE_RESULT；进下一阶段就收回，历史留在 proposals 里
   const votesRevealed = state.phase === "VOTE_RESULT";
 
@@ -97,7 +99,7 @@ export const projectFor = (state: GameState, viewerSeat: number | null): ClientG
      * 默认给最少的那一份，加错地方顶多少看到几条；反过来默认给全量、
      * 再去某个分支里减，漏一个分支就是把红方名单发出去。
      */
-    chat: state.chat.filter((m) => m.channel === "ALL"),
+    chat: chat.filter((m) => m.channel === "ALL"),
 
     me: null,
     spectate: null,
@@ -115,7 +117,7 @@ export const projectFor = (state: GameState, viewerSeat: number | null): ClientG
       ...view,
       // 全知视角连队友频道一起给：这个分支本来就已经把全员身份和视野都发了，
       // 单独藏着聊天记录没有意义，而观战最好看的恰恰是红方怎么串供
-      chat: [...state.chat],
+      chat: [...chat],
       spectate: {
         roles: [...state.roles],
         sides: [...state.sides],
@@ -134,7 +136,7 @@ export const projectFor = (state: GameState, viewerSeat: number | null): ClientG
 
   return {
     ...view,
-    ...(inEvilChat ? { chat: [...state.chat] } : {}),
+    ...(inEvilChat ? { chat: [...chat] } : {}),
     me: {
       seat: viewerSeat,
       roleId,

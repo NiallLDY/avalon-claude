@@ -403,7 +403,7 @@ export const Game = () => {
 
         <nav className="flex gap-2 pt-1">
           <Button tone="ghost" className="flex-1 text-xs" onClick={() => setSheet("role")}>
-            身份卡
+            身份
           </Button>
           <Button tone="ghost" className="flex-1 text-xs" onClick={() => setSheet("report")}>
             战报

@@ -555,14 +555,16 @@ export const appendChat = (
   if (msg.seat < 0 || msg.seat >= state.playerCount) return null;
   if (msg.channel === "EVIL" && !evilChatSeats(state.roles).includes(msg.seat)) return null;
 
+  // 旧版本快照没有 chat；恢复后的第一条消息从空记录开始即可。
+  const chat = state.chat ?? [];
   const next: ChatMessage = {
     // 递增的 id 由长度推不出来（会截断），拿最后一条的 id 往上加
-    id: (state.chat[state.chat.length - 1]?.id ?? 0) + 1,
+    id: (chat[chat.length - 1]?.id ?? 0) + 1,
     channel: msg.channel,
     seat: msg.seat,
     text,
     at: msg.at,
   };
   // 只留最近 CHAT_HISTORY_MAX 条：整份聊天记录每次状态推送都要重发一遍
-  return { ...state, chat: [...state.chat, next].slice(-CHAT_HISTORY_MAX) };
+  return { ...state, chat: [...chat, next].slice(-CHAT_HISTORY_MAX) };
 };

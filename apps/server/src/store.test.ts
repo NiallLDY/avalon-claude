@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "@avalon/shared";
 import { gameSettingsSchema } from "@avalon/shared/schemas";
+import { createGame, projectFor, seededRng, type GameState } from "@avalon/engine";
 import { fromSnapshot, type RoomSnapshot } from "./store.js";
 
 /** 一份「上个版本」写下的快照：settings 里没有后来新增的开关 */
@@ -59,5 +60,17 @@ describe("fromSnapshot", () => {
     });
     expect(room.settings.mode).toBe("LANCELOT");
     expect(room.settings.ladyOfTheLake).toBe(true);
+  });
+
+  it("补上旧对局快照里没有的聊天记录，恢复后可以立即重连", () => {
+    const current = createGame(
+      { playerCount: 5, settings: DEFAULT_SETTINGS, firstLeaderSeat: 0 },
+      seededRng([0]),
+    );
+    const { chat: _drop, ...oldGame } = current;
+    const room = fromSnapshot({ ...legacySnapshot(), game: oldGame as GameState });
+
+    expect(room.game?.chat).toEqual([]);
+    expect(() => projectFor(room.game!, 0)).not.toThrow();
   });
 });

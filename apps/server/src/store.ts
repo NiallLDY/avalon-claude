@@ -74,7 +74,14 @@ export const fromSnapshot = (snap: RoomSnapshot): Room => ({
    * 于是「改设置没反应」，而且只在跨版本存活的房间里发生，最难查。
    */
   settings: { ...DEFAULT_SETTINGS, ...snap.settings },
-  game: snap.game,
+  /* 旧版本写下的对局快照没有后来新增的字段；在恢复边界统一补齐。 */
+  game: snap.game
+    ? {
+        ...snap.game,
+        settings: { ...DEFAULT_SETTINGS, ...snap.game.settings },
+        chat: snap.game.chat ?? [],
+      }
+    : null,
   createdAt: snap.createdAt,
   updatedAt: snap.updatedAt,
   ownerIp: snap.ownerIp,
