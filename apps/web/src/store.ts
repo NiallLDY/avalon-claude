@@ -25,6 +25,7 @@ import {
   saveLastRoom,
   saveProfile,
 } from "./lib/identity.js";
+import { clearInviteUrl, readInviteCode } from "./lib/invite.js";
 
 /**
  * 一张待玩家点掉的结果卡。事件到达时就把当时的状态快照进去 ——
@@ -90,6 +91,9 @@ const REACTION_MS = 4_000;
 /** 心跳间隔。线下发牌器的流量可以忽略不计，快一点让卡顿早点被看见 */
 const PING_INTERVAL_MS = 4_000;
 
+/** 「正在进入房间」最多停这么久。超了就放行去大厅，别做成死胡同 */
+const RESTORE_GIVEUP_MS = 8_000;
+
 interface AppState {
   socket: Socket | null;
   conn: ConnStatus;
@@ -111,6 +115,13 @@ interface AppState {
   restoring: boolean;
   /** 还没设过昵称头像，先挡一道首次设置 */
   needsOnboarding: boolean;
+  /**
+   * 从邀请链接 `/j/123456` 点进来、还没进成的那个房间码。
+   *
+   * 不能一拿到就 join：首次设置还没做完的话，人会顶着「圆桌骑士」进房。
+   * 所以先存着，等 socket 连上**且**首次设置做完了再进。
+   */
+  pendingInvite: string | null;
   /** 规则页开着没。任何页面都能开，所以放全局 */
   rulesOpen: boolean;
   /** 排行榜页开着没 */
@@ -219,8 +230,10 @@ export const useStore = create<AppState>((set, get) => ({
   rooms: [],
   state: null,
   finishedGame: null,
-  restoring: loadLastRoom() !== null,
+  // 邀请链接也算「正在进房」，不然会先闪一下大厅再跳进去
+  restoring: loadLastRoom() !== null || readInviteCode() !== null,
   needsOnboarding: !hasProfile(),
+  pendingInvite: readInviteCode(),
   rulesOpen: false,
   boardOpen: false,
   lastEvent: null,
@@ -231,6 +244,15 @@ export const useStore = create<AppState>((set, get) => ({
 
   connect: () => {
     if (get().socket) return;
+
+    /*
+     * 兜底：连不上时别把人永远停在「正在进入房间…」那一屏。
+     * 到点就放行去大厅，规则页和战绩至少还能看；真连上了，
+     * 后面那一脚 join 照样会把人送回房间，这里放行不影响。
+     */
+    setTimeout(() => {
+      if (get().restoring) set({ restoring: false });
+    }, RESTORE_GIVEUP_MS);
     const socket = io({
       path: "/ws",
       transports: ["websocket", "polling"],
@@ -267,6 +289,17 @@ export const useStore = create<AppState>((set, get) => ({
       // 跳过 join 的话玩家屏幕上一切正常（旧状态还挂着），实际已经是个幽灵：
       // 收不到任何推送，操作也全被当成「不在房间里」丢掉。
       // 服务端的 joinRoom 对已在房间的玩家是幂等的，重复发没有副作用。
+      /*
+       * 邀请链接优先于「上次待的房间」—— 人是冲着这条链接点进来的。
+       * 但首次设置还没做完时一个字都不发：那会顶着占位昵称进房，
+       * 等 completeOnboarding 再补这一脚。
+       */
+      const invite = get().pendingInvite;
+      if (invite) {
+        if (!get().needsOnboarding) socket.emit("room:join", { roomId: invite });
+        return;
+      }
+
       const roomId = loadLastRoom();
       if (roomId) socket.emit("room:join", { roomId });
       else set({ restoring: false });
@@ -277,6 +310,11 @@ export const useStore = create<AppState>((set, get) => ({
 
     socket.on("state", (payload: StatePayload) => {
       saveLastRoom(payload.room.id);
+      // 邀请兑现了就丢掉，地址栏也收回根路径 —— 刷新靠 lastRoom 回来，不靠链接
+      if (get().pendingInvite) {
+        set({ pendingInvite: null });
+        clearInviteUrl();
+      }
       const previous = get().state;
       set({ state: payload, restoring: false });
 
@@ -379,6 +417,18 @@ export const useStore = create<AppState>((set, get) => ({
     });
 
     socket.on("error", ({ code, message }: { code: string; message: string }) => {
+      /*
+       * 邀请链接进不去要**明说**。
+       * 这跟刷新后自动回房不一样：那是后台行为，静默回大厅刚好；
+       * 邀请是用户主动点的，不给反馈他只会看到一个空荡荡的大厅，
+       * 以为是自己点错了。丢掉 pendingInvite，免得刷新一次重试一次。
+       */
+      if (get().pendingInvite) {
+        set({ pendingInvite: null, restoring: false });
+        clearInviteUrl();
+        get().toast(code === "ROOM_NOT_FOUND" ? "这个房间不在了" : (ERROR_TEXT[code] ?? message), "error");
+        return;
+      }
       // 自动回房失败（房间已解散等）不该弹错，安静回大厅就行
       if (get().restoring && code === "ROOM_NOT_FOUND") {
         clearLastRoom();
@@ -406,7 +456,13 @@ export const useStore = create<AppState>((set, get) => ({
     get().socket?.emit("room:profile", profile);
   },
 
-  completeOnboarding: () => set({ needsOnboarding: false }),
+  completeOnboarding: () => {
+    set({ needsOnboarding: false });
+    // 从邀请链接进来的：设置期间那一脚 join 被压着没发，现在补上。
+    // socket 还没连上也不要紧，connect 回调里会再看一次 pendingInvite。
+    const invite = get().pendingInvite;
+    if (invite) get().socket?.emit("room:join", { roomId: invite });
+  },
   setRulesOpen: (rulesOpen) => set({ rulesOpen }),
   setBoardOpen: (boardOpen) => set({ boardOpen }),
 

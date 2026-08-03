@@ -23,10 +23,12 @@ import { RoleCard } from "../components/RoleCard.js";
 import { Button, Latency, Sheet } from "../components/ui.js";
 import { Report } from "./Report.js";
 import { labeler, seatNo } from "../lib/labels.js";
+import { shareRoom } from "../lib/invite.js";
 import { selfId, useStore } from "../store.js";
 
 /** 顶部：5 轮任务进度 + 房间名/码 + 延迟 + 流局 + 我是几号 */
 const Progress = ({ game, room }: { game: ClientGameView; room: RoomView }) => {
+  const toast = useStore((st) => st.toast);
   const sizes = TEAM_SIZE[game.playerCount as 5] ?? [];
   return (
     // 左右两组固定宽度，中间那组吃掉剩余空间。每组都得 shrink-0 ——
@@ -69,9 +71,20 @@ const Progress = ({ game, room }: { game: ClientGameView; room: RoomView }) => {
           <span className="min-w-0 truncate text-[0.62rem] text-ink-mute">{room.name}</span>
           <Latency />
         </span>
-        <span className="mt-0.5 font-display text-[0.7rem] tracking-widest whitespace-nowrap text-gold">
-          {room.id}
-        </span>
+        {/* 对局中也能拉人来观战，点一下就把邀请链接分享出去 */}
+        <button
+          type="button"
+          onClick={() => void shareRoom(room.id, room.name, toast)}
+          aria-label="分享房间邀请链接"
+          className="mt-0.5 rounded px-1 active:bg-surface"
+        >
+          <span
+            data-room-code
+            className="font-display text-[0.7rem] tracking-widest whitespace-nowrap text-gold"
+          >
+            {room.id}
+          </span>
+        </button>
       </div>
 
       {/*

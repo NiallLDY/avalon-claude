@@ -10,6 +10,14 @@ import { Leaderboard } from "./pages/Leaderboard.js";
 import { Rules } from "./pages/Rules.js";
 import { useStore } from "./store.js";
 
+/** 正在进房时的占位屏。连接横幅照常挂着，真连不上时不会只剩一句「正在进入」 */
+const Entering = () => (
+  <div className="flex h-full flex-col items-center justify-center gap-3">
+    <span className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-gold" />
+    <p className="text-sm text-ink-mute">正在进入房间…</p>
+  </div>
+);
+
 export const App = () => {
   const connect = useStore((s) => s.connect);
   const state = useStore((s) => s.state);
@@ -19,6 +27,7 @@ export const App = () => {
   const boardOpen = useStore((s) => s.boardOpen);
   const setBoardOpen = useStore((s) => s.setBoardOpen);
   const setRulesOpen = useStore((s) => s.setRulesOpen);
+  const restoring = useStore((s) => s.restoring);
 
   useEffect(() => connect(), [connect]);
 
@@ -35,7 +44,12 @@ export const App = () => {
   // 唯一的例外是终局：房间可能已经被别人退回等待页了，但我还没看完 ——
   // 那就接着显示本地留的那份，直到我自己点掉（store 里的 finishedGame）。
   const screen = !state ? (
-    <Lobby />
+    // 刷新回房或点邀请链接进来时，先别把大厅闪一下 —— 那一下会让人以为没进去
+    restoring ? (
+      <Entering />
+    ) : (
+      <Lobby />
+    )
   ) : finishedGame ? (
     <GameOver game={finishedGame} />
   ) : state.game === null ? (

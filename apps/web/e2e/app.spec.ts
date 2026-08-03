@@ -32,7 +32,7 @@ const createRoom = async (page: Page, name = "测试房") => {
   await page.getByPlaceholder(/的房间$/).fill(name);
   await page.getByRole("button", { name: "创建" }).click();
   // 进房后头部会显示 6 位纯数字房间码
-  const code = page.locator("p.font-display").first();
+  const code = page.locator("[data-room-code]").first();
   await expect(code).toHaveText(/^\d{6}$/);
   return (await code.textContent())!.trim();
 };
@@ -67,7 +67,7 @@ test.describe("断线重连", () => {
     await openApp(pb, "小梅");
     await pb.getByPlaceholder("房间码").fill(code);
     await pb.getByRole("button", { name: "进", exact: true }).click();
-    await expect(pb.locator("p.font-display").first()).toHaveText(code);
+    await expect(pb.locator("[data-room-code]").first()).toHaveText(code);
     await sit(pb, 1);
     await expect(pb.getByText("阿隆")).toBeVisible();
 
@@ -130,7 +130,7 @@ test.describe("房间", () => {
     await page.reload();
 
     // 刷新后仍在房间：房间码还在，没退回大厅标题
-    await expect(page.locator("p.font-display").first()).toHaveText(code);
+    await expect(page.locator("[data-room-code]").first()).toHaveText(code);
     await expect(page.getByRole("button", { name: "开房间" })).toHaveCount(0);
   });
 
@@ -194,6 +194,83 @@ test.describe("房间", () => {
   });
 });
 
+test.describe("邀请链接", () => {
+  test("点链接直接进房；没设过昵称的先设置，设完自动进", async ({ browser }) => {
+    const a = await browser.newContext({ locale: "zh-CN" });
+    const pa = await a.newPage();
+    await openApp(pa, "房主");
+    const code = await createRoom(pa, "邀请测试");
+    await sit(pa, 0);
+
+    // ── 老用户：设过昵称，点链接一步到位 ──
+    const b = await browser.newContext({ locale: "zh-CN" });
+    const pb = await b.newPage();
+    await openApp(pb, "老王"); // 先走一遍首次设置
+    await pb.goto(`/j/${code}`);
+    await expect(pb.locator("[data-room-code]").first()).toHaveText(code);
+    // 地址栏要收回根路径，别让邀请码一直挂着
+    expect(new URL(pb.url()).pathname).toBe("/");
+
+    // ── 新用户：没设过昵称，先被首次设置挡住，设完自动进同一个房 ──
+    const c = await browser.newContext({ locale: "zh-CN" });
+    const pc = await c.newPage();
+    await pc.goto(`/j/${code}`);
+    const enter = pc.getByRole("button", { name: "进去玩" });
+    await expect(enter, "新用户该先看到首次设置").toBeVisible();
+    // 这一刻绝不能已经进房 —— 那意味着顶着占位昵称就进去了
+    await expect(pc.locator("[data-room-code]")).toHaveCount(0);
+    await pc.getByPlaceholder("你的昵称").fill("新来的");
+    await enter.click();
+
+    // 设完直接落在房间里，不经过大厅
+    await expect(pc.locator("[data-room-code]").first()).toHaveText(code);
+    await expect(pc.getByRole("button", { name: "开房间" })).toHaveCount(0);
+    // 房主那边看得到这两个人，且名字是自己设的那个
+    await expect(pa.getByText("新来的")).toBeVisible();
+    await expect(pa.getByText("老王")).toBeVisible();
+
+    for (const ctx of [a, b, c]) await ctx.close();
+  });
+
+  test("点房间码能唤起分享，拿到的链接指向这个房间", async ({ page }) => {
+    await openApp(page, "分享的人");
+    const code = await createRoom(page, "分享测试");
+
+    /*
+     * WebKit 无头环境里既没有 navigator.share，clipboard 也不给权限，
+     * 真去点会走到「复制失败」那条分支 —— 那验不出链接对不对。
+     * 所以把这两个 API 都替换掉，验的是**我们传给系统的是什么**。
+     */
+    await page.evaluate(() => {
+      const w = window as unknown as { __shared?: unknown };
+      Object.defineProperty(navigator, "share", {
+        configurable: true,
+        value: (data: unknown) => {
+          w.__shared = data;
+          return Promise.resolve();
+        },
+      });
+    });
+
+    await page.getByRole("button", { name: "分享房间邀请链接" }).click();
+    const shared = await page.evaluate(
+      () => (window as unknown as { __shared?: { url: string; text: string } }).__shared,
+    );
+    expect(shared?.url, "分享出去的链接不对").toBe(`${new URL(page.url()).origin}/j/${code}`);
+    expect(shared?.text).toContain("分享测试");
+  });
+
+  test("链接指向的房间没了，要说清楚并留在大厅", async ({ page }) => {
+    await openApp(page, "找错门");
+    await page.goto("/j/000000"); // 这个码不可能存在
+
+    await expect(page.getByText("这个房间不在了")).toBeVisible();
+    await expect(page.getByRole("button", { name: "开房间" })).toBeVisible();
+    // 地址栏也要收干净，否则刷新一次重试一次、错误提示反复弹
+    expect(new URL(page.url()).pathname).toBe("/");
+  });
+});
+
 test.describe("换座位", () => {
   test("两个玩家可以互相申请并同意换座", async ({ browser }) => {
     const a = await browser.newContext({ locale: "zh-CN" });
@@ -209,7 +286,7 @@ test.describe("换座位", () => {
     await openApp(pb);
     await pb.getByPlaceholder("房间码").fill(code);
     await pb.getByRole("button", { name: "进", exact: true }).click();
-    await expect(pb.locator("p.font-display").first()).toHaveText(code);
+    await expect(pb.locator("[data-room-code]").first()).toHaveText(code);
     await sit(pb, 1);
     await expect(pa.getByText("2/5 就位").or(pa.getByText(/还有 3 个空位/))).toBeVisible();
 
@@ -296,7 +373,7 @@ test.describe("退出房间", () => {
     for (const [i, p] of pages.slice(1).entries()) {
       await p.getByPlaceholder("房间码").fill(code);
       await p.getByRole("button", { name: "进", exact: true }).click();
-      await expect(p.locator("p.font-display").first()).toHaveText(code);
+      await expect(p.locator("[data-room-code]").first()).toHaveText(code);
       await sit(p, i + 1);
     }
     for (const p of pages) await p.getByRole("button", { name: "准备" }).click();
@@ -312,7 +389,7 @@ test.describe("退出房间", () => {
     // 对局中也要能看到房间名和房间码。以前只藏在「离开这局？」的弹窗里 ——
     // 等你想退出时才看得到房间码，那时候已经晚了
     await expect(quitter.getByText("退出测试")).toBeVisible();
-    await expect(quitter.locator("p.font-display, span.font-display").filter({ hasText: code }).first()).toBeVisible();
+    await expect(quitter.locator("[data-room-code]").filter({ hasText: code }).first()).toBeVisible();
 
     await quitter.getByRole("button", { name: "退出" }).click();
     // 对局中退出要先确认 —— 座位会保留，这件事必须说清楚
@@ -375,7 +452,7 @@ test.describe("终局", () => {
     for (const [i, p] of pages.slice(1).entries()) {
       await p.getByPlaceholder("房间码").fill(code);
       await p.getByRole("button", { name: "进", exact: true }).click();
-      await expect(p.locator("p.font-display").first()).toHaveText(code);
+      await expect(p.locator("[data-room-code]").first()).toHaveText(code);
       await sit(p, i + 1);
     }
     for (const p of pages) await p.getByRole("button", { name: "准备" }).click();

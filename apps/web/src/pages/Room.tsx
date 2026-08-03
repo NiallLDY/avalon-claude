@@ -24,6 +24,7 @@ import { ProfileButton } from "../components/Profile.js";
 import { SeatBoard } from "../components/SeatBoard.js";
 import { Button, Latency, Segmented, Sheet, Toggle } from "../components/ui.js";
 import { labeler } from "../lib/labels.js";
+import { shareRoom } from "../lib/invite.js";
 import { selfId, useStore } from "../store.js";
 
 /** 当前人数会发到什么角色。「几人局」由房主设定，这里把牌面摊开给大家看 */
@@ -122,7 +123,19 @@ export const Room = () => {
             <p className="truncate text-sm">{room.name}</p>
             <Latency />
           </div>
-          <p className="font-display text-lg tracking-[0.3em] text-gold">{room.id}</p>
+          {/*
+            房间码本身就是分享按钮 —— 头部已经挤了四个按钮，再塞一个放不下，
+            而「把这个码给别人」正是所有人看到它时想做的事。
+          */}
+          <button
+            type="button"
+            onClick={() => void shareRoom(room.id, room.name, toast)}
+            className="mx-auto flex items-center gap-1.5 rounded-lg px-2 active:bg-surface"
+            aria-label="分享房间邀请链接"
+          >
+            <span data-room-code className="font-display text-lg tracking-[0.3em] text-gold">{room.id}</span>
+            <span className="rounded bg-gold/15 px-1 py-0.5 text-[0.6rem] text-gold">邀请</span>
+          </button>
         </div>
         <button
           type="button"

@@ -199,6 +199,8 @@ function projectFor(game: Game, viewer: PlayerId | null): ClientGameView
 
 1. 首次进站：前端生成 `playerId = uuidv7()` + `token = 32B random`，存 `localStorage`。
 2. 昵称 + 头像在**首页设置**，也存 `localStorage`，随时可改。
+   邀请链接 `/j/<房间码>` 点进来时，没设过昵称的先走一遍首次设置，**设完自动进房**
+   —— 不能先进房再设，那样人会顶着占位昵称出现在桌上（`apps/web/src/lib/invite.ts`）。
 3. 入房时携带 `{playerId, token}`；服务端以此认座位、认房主、认重连。
 4. **换手机 = 新身份**（按你的要求，重新设昵称头像即可）。若原座位仍被占，房主可踢掉幽灵玩家后入座。
    同理 **换域名 = 全员新身份** —— `localStorage` 按 origin 隔离，跟服务器搬不搬家无关（见 §10.5）。
