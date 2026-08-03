@@ -254,10 +254,15 @@ test.describe("邀请链接", () => {
 
     await page.getByRole("button", { name: "分享房间邀请链接" }).click();
     const shared = await page.evaluate(
-      () => (window as unknown as { __shared?: { url: string; text: string } }).__shared,
+      () => (window as unknown as { __shared?: Record<string, string> }).__shared,
     );
     expect(shared?.url, "分享出去的链接不对").toBe(`${new URL(page.url()).origin}/j/${code}`);
-    expect(shared?.text).toContain("分享测试");
+    expect(shared?.title).toContain("分享测试");
+    /*
+     * **不许再有 text。** 同时给 text 和 url 时，很多分享目标（尤其是系统面板里的
+     * 「拷贝」）只取 text 就把 url 丢了，复制出来是一句没有链接的话。
+     */
+    expect(shared, "带上 text 会让「拷贝」复制不到链接").not.toHaveProperty("text");
   });
 
   test("链接指向的房间没了，要说清楚并留在大厅", async ({ page }) => {

@@ -47,10 +47,15 @@ export type ShareResult = "shared" | "copied" | "cancelled" | "failed";
 /**
  * 分享邀请链接。优先调系统分享面板（手机上能直接发微信），
  * 不支持就退回复制到剪贴板。
+ *
+ * **不要再传 `text`。** 同时给 `text` 和 `url` 时，很多分享目标只取 `text`
+ * 就把 `url` 丢了 —— 系统面板里的「拷贝」尤其明显：复制出来是一句
+ * 「来玩阿瓦隆 · 某某房」，链接根本不在里面，粘出去谁也进不来。
+ * 房间名挪进 `title`，让 `url` 单独当主体，各个目标才都拿得到链接。
  */
 export const shareInvite = async (roomId: string, roomName: string): Promise<ShareResult> => {
   const url = inviteUrl(roomId);
-  const data = { title: "Melbourne 阿瓦隆", text: `来玩阿瓦隆 · ${roomName}`, url };
+  const data = { title: `阿瓦隆 · ${roomName}`, url };
 
   if (navigator.share && (navigator.canShare?.(data) ?? true)) {
     try {
